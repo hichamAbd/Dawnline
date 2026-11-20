@@ -1,0 +1,7 @@
+{
+  "name": "dawnline",
+  "private": true,
+  "type": "module",
+  "description": "Tests only: the app itself has no build step. Run: npm test",
+  "scripts": { "test": "node --test tests/*.test.js" }
+}
