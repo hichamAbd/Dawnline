@@ -117,3 +117,38 @@ export function methodTimes(m, day, highLat = "method") {
 
 export const PRAYERS = ["fajr", "sunrise", "dhuhr", "asr", "maghrib", "isha"];
 export const PRAYER_NAMES = { fajr: "Fajr", sunrise: "Sunrise", dhuhr: "Dhuhr", asr: "Asr", maghrib: "Maghrib", isha: "Isha" };
+
+// ---------- named moments of the sun's day (tap targets on the graph) ----------
+// Angles below the horizon: 0.833 = sunrise/sunset, 6 = civil twilight, then
+// every angle the methods use.
+export const MOMENT_ANGLES = [0.833, 6, 12, 15, 17, 17.5, 18, 18.5, 19, 19.5];
+
+function momentName(a, dawn) {
+  if (a === 0.833) return dawn ? "Sunrise" : "Sunset";
+  if (a === 6) return dawn ? "Civil dawn · 6°" : "Civil dusk · 6°";
+  if (a === 12) return dawn ? "Nautical dawn · 12°" : "Nautical dusk · 12°";
+  if (a === 18) return dawn ? "Astronomical dawn · 18°" : "Astronomical dusk · 18°";
+  return dawn ? `${a}° before sunrise` : `${a}° after sunset`;
+}
+
+// When the sun's centre is at altitude `alt` (degrees, negative below the
+// horizon) on this day: { rising, setting }, each NaN when never reached.
+export function timesAtAltitude(day, alt) {
+  const { lat, lon } = day.place;
+  return {
+    rising: A.timeAtAltitude(day.noon, alt, lat, lon, -1),
+    setting: A.timeAtAltitude(day.noon, alt, lat, lon, 1),
+  };
+}
+
+// Solar noon plus every crossing of MOMENT_ANGLES, in time order.
+export function sunMoments(day) {
+  const out = [];
+  if (Number.isFinite(day.noon)) out.push({ t: day.noon, alt: day.maxAlt, name: "Solar noon", key: "noon" });
+  for (const a of MOMENT_ANGLES) {
+    const { rising, setting } = timesAtAltitude(day, -a);
+    if (Number.isFinite(rising)) out.push({ t: rising, alt: -a, angle: a, name: momentName(a, true), key: `r${a}` });
+    if (Number.isFinite(setting)) out.push({ t: setting, alt: -a, angle: a, name: momentName(a, false), key: `s${a}` });
+  }
+  return out.sort((x, y) => x.t - y.t);
+}

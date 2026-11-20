@@ -237,3 +237,63 @@ dialog.sheet::backdrop { background: rgba(0, 0, 0, 0.35); }
 .card { z-index: 1; }
 .card:first-of-type, section.card[aria-label="The sun and the methods"] { z-index: 2; }
 .chip:focus:not(:focus-visible), .btn:focus:not(:focus-visible), .choice:focus:not(:focus-visible) { outline: none; }
+
+/* Header actions */
+.top-actions { display: flex; gap: 8px; flex: none; }
+
+/* Live readout: the angle is a button that opens "Go to an angle" */
+.angle-block { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+button.angle-now { display: inline-flex; align-items: baseline; gap: 0; text-align: left; border-radius: 12px; padding: 2px 4px; margin: -2px -4px; }
+button.angle-now:active { background: rgba(255, 255, 255, 0.1); }
+.angle-now .kbd { width: 18px; height: 18px; margin-left: 8px; align-self: center; fill: none; stroke: var(--ink-3); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.moment-name { min-height: 18px; margin-top: 4px; font-size: 13.5px; font-weight: 600; color: var(--accent); }
+
+/* Named moments on the curve (tap to jump) */
+.moment { fill: rgba(255, 255, 255, 0.72); stroke: rgba(8, 16, 40, 0.55); stroke-width: 1; }
+.moment-strong { fill: #fff; }
+.moment-fav { fill: var(--accent); }
+
+/* Key moments: each time is a button */
+.tbtn { position: relative; font-weight: 600; text-decoration: underline dotted rgba(255, 255, 255, 0.45); text-underline-offset: 4px; }
+.tbtn::before { content: ""; position: absolute; inset: -12px -6px; }
+.tbtn:active { color: var(--accent); }
+
+/* "Go to an angle" sheet */
+.angle-input-row { display: flex; align-items: center; gap: 6px; margin: 4px 0 14px; }
+.angle-input {
+  width: 6ch; font-size: 42px; font-weight: 300; padding: 4px 12px; border-radius: 14px;
+  border: 0.5px solid var(--glass-edge); background: rgba(255, 255, 255, 0.08); color: var(--ink);
+  font-variant-numeric: tabular-nums; font-family: inherit;
+}
+.angle-unit { font-size: 42px; font-weight: 300; color: var(--ink-2); }
+.seg { display: flex; gap: 3px; padding: 3px; border-radius: 12px; background: rgba(255, 255, 255, 0.08); }
+.seg button { flex: 1; min-height: 40px; border-radius: 9px; font-size: 15px; color: var(--ink-2); }
+.seg button[aria-checked="true"] { background: rgba(255, 255, 255, 0.2); color: var(--ink); font-weight: 600; }
+.quick { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.angle-results { display: flex; flex-direction: column; gap: 8px; }
+.result { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 56px; padding: 0 16px; border-radius: 14px; background: rgba(255, 255, 255, 0.1); font-size: 16px; color: var(--ink-2); }
+.result b { font-size: 24px; font-weight: 600; color: var(--ink); }
+.result:active { background: rgba(255, 210, 122, 0.25); }
+
+/* "How prayer times work" */
+.diagram { display: block; width: 100%; margin: 8px 0 2px; }
+.dg-night { fill: rgba(0, 4, 30, 0.28); }
+.dg-horizon { stroke: rgba(255, 255, 255, 0.6); stroke-width: 1; }
+.dg-curve { fill: none; stroke: #fff; stroke-width: 2; stroke-linejoin: round; }
+.dg-track { stroke: rgba(255, 255, 255, 0.15); stroke-width: 1; }
+.dg-tick { stroke-width: 1; stroke-dasharray: 2 2; opacity: 0.75; }
+.dg-label { font-size: 11px; fill: var(--ink-2); font-variant-numeric: tabular-nums; }
+.sheet-body h3.guide-h { display: flex; align-items: center; gap: 8px; margin: 24px 0 6px; font-size: 17px; letter-spacing: 0; text-transform: none; color: var(--ink); }
+.guide-dot { flex: none; width: 12px; height: 12px; border-radius: 6px; }
+.more-link { display: block; min-height: 44px; font-size: 15px; color: var(--accent); text-align: left; }
+
+/* Readout layout: angle and clock on top, then trend + moment and the date
+   chips, which wrap onto their own line on narrow screens. */
+.readout { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 8px; row-gap: 6px; padding: 0 4px; }
+.readout .clock { grid-column: 2; grid-row: 1; font-size: 22px; font-weight: 600; text-align: right; }
+.readout .angle-now { grid-column: 1; grid-row: 1; justify-self: start; font-size: clamp(38px, 12vw, 46px); }
+.readout-sub { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 32px; }
+.trend-line { font-size: 15px; color: var(--ink-2); }
+.readout-sub .moment-name { display: inline; min-height: 0; margin: 0; font-size: 15px; }
+.readout-sub .moment-name:not(:empty)::before { content: " · "; color: var(--ink-3); font-weight: 400; }
+.readout-sub .date-row { margin-left: auto; display: flex; gap: 6px; }

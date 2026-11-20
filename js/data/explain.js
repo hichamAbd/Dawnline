@@ -119,3 +119,56 @@ export const EXPLAIN = {
     links: [["Time zone database releases (IANA)", "https://www.iana.org/time-zones/releases"], ["Time zone news (timeanddate)", "https://www.timeanddate.com/news/time/"]],
   },
 };
+
+// The "How prayer times work" page: the broad logic of the five prayers.
+export const PRAYERS_GUIDE = {
+  title: "How prayer times work",
+  intro: "The five daily prayers follow the sun. Each one has a window that opens with a sign in the sky and lasts until the next sign. A timetable gives the moment each window opens.",
+  sections: [
+    {
+      key: "fajr",
+      title: "Fajr · dawn",
+      text: ["From true dawn, when light first spreads along the eastern horizon, until sunrise. The methods place true dawn when the sun is 12° to 19.5° below the horizon. The fast of Ramadan starts here, and some calendars print an Imsak a few minutes earlier as a margin."],
+      more: "dawn",
+    },
+    {
+      title: "Sunrise · not a prayer",
+      text: ["Sunrise closes the Fajr window. The hadiths discourage praying while the sun is rising, while it stands at its highest at midday, and while it is setting."],
+      more: "refraction",
+    },
+    {
+      key: "dhuhr",
+      title: "Dhuhr · midday",
+      text: ["From just after solar noon, when the sun starts to move down from its highest point, until Asr. Many calendars add a few minutes so the sun has clearly passed its highest point. On Fridays the congregational Jumu'ah prayer takes its place."],
+    },
+    {
+      key: "asr",
+      title: "Asr · afternoon",
+      text: ["From when an object's shadow equals its noon shadow plus its own height (twice its height in the Hanafi school) until sunset. Delaying it until the sun turns pale and yellow is discouraged."],
+      more: "asr",
+    },
+    {
+      key: "maghrib",
+      title: "Maghrib · sunset",
+      text: ["From the moment the sun's disc has fully set until the twilight has gone: the shortest window. Some calendars add a few minutes after sunset."],
+    },
+    {
+      key: "isha",
+      title: "Isha · night",
+      text: ["From the end of twilight (the red glow for most scholars, the white glow for Abu Hanifa) until the middle of the night as the preferred limit; many scholars hold it can still be prayed until dawn. Methods turn the end of twilight into an angle, 12° to 18°, or into a fixed delay after sunset."],
+      more: "twilight",
+    },
+    {
+      title: "Why timetables differ",
+      text: ["The signs are the same for everyone. Conventions differ in four places: the angle chosen for dawn and for the end of twilight, the Asr shadow rule, the safety minutes added after the astronomical moment, and the rule used in summer when the twilight lasts all night. The bars on the main screen show the result side by side."],
+      more: "summer",
+    },
+  ],
+  links: [
+    ["The five windows: Sahih Muslim 612", "https://sunnah.com/muslim:612d"],
+    ["Jibril leads the prayers: Abu Dawud 393", "https://sunnah.com/abudawud:393"],
+    ["When prayer is discouraged: Sahih Muslim 831", "https://sunnah.com/muslim:831"],
+    ["Quran 17:78", "https://quran.com/17/78"],
+    ["Quran 11:114", "https://quran.com/11/114"],
+  ],
+};

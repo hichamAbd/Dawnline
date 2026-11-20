@@ -147,3 +147,32 @@ test("A fixed time-zone override wins over the zone's own data", () => {
   assert.equal(offsetAt({ zone: "Europe/Paris" }, Date.parse("2026-07-15T12:00:00Z")), 120);
   assert.equal(offsetAt({ zone: "Europe/Paris" }, Date.parse("2026-11-20T12:00:00Z")), 60);
 });
+
+// ---------- named moments and typed angles ----------
+import { sunMoments, timesAtAltitude } from "../js/prayer.js";
+
+test("Named moments: sunrise and sunset match the day, every crossing is at its angle", () => {
+  const day = sunDay({ lat: 48.8534, lon: 2.3488 }, { y: 2026, m: 10, d: 27 }, PARIS);
+  const ms = sunMoments(day);
+  const find = (name) => ms.find((m) => m.name === name);
+  assert.equal(find("Sunrise").t, day.sunrise);
+  assert.equal(find("Sunset").t, day.sunset);
+  assert.equal(find("Solar noon").t, day.noon);
+  for (const m of ms.filter((m) => m.angle && m.angle !== 0.833)) {
+    const alt = A.sunAltitude(m.t, 48.8534, 2.3488);
+    assert.ok(Math.abs(alt + m.angle) < 0.02, `${m.name}: ${alt}`);
+  }
+  // in time order, morning crossings before noon, evening ones after
+  for (let i = 1; i < ms.length; i++) assert.ok(ms[i].t >= ms[i - 1].t);
+  near(hhmm(PARIS, find("Nautical dawn · 12°").t), "06:20", 1, "12° dawn = France 12° Fajr");
+});
+
+test("Typed angle: rising and setting times, and unreachable angles", () => {
+  const day = sunDay({ lat: 48.8566, lon: 2.3522 }, { y: 2026, m: 6, d: 21 }, PARIS);
+  const below18 = timesAtAltitude(day, -18);
+  assert.ok(!Number.isFinite(below18.rising) && !Number.isFinite(below18.setting), "Paris never reaches -18° on 21 June");
+  const above60 = timesAtAltitude(day, 60);
+  assert.ok(Number.isFinite(above60.rising) && Number.isFinite(above60.setting) && above60.rising < above60.setting);
+  const above70 = timesAtAltitude(day, 70);
+  assert.ok(!Number.isFinite(above70.rising), "the sun stays below 70°");
+});

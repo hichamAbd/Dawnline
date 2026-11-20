@@ -1,11 +1,11 @@
 // Dawnline: main screen, sheets, settings and first launch.
 import { METHODS, HIGH_LAT_RULES, REGION_DEFAULTS, CONTINENT_DEFAULTS, RULES_UPDATED } from "./data/methods.js";
 import { TZ_RULES_UPDATED, COUNTRY_ZONES } from "./data/timezones.js";
-import { EXPLAIN } from "./data/explain.js";
-import { sunDay, methodTimes, PRAYERS, PRAYER_NAMES } from "./prayer.js";
+import { EXPLAIN, PRAYERS_GUIDE } from "./data/explain.js";
+import { sunDay, methodTimes, PRAYERS, PRAYER_NAMES, sunMoments, timesAtAltitude } from "./prayer.js";
 import { hhmm, offsetAt, offsetLabel, localParts, zonedToUtc } from "./tz.js";
 import { sunAltitude } from "./astro.js";
-import { drawGraph, drawSun, drawAxis, drawBars, xOf, tOf } from "./graph.js";
+import { drawGraph, drawSun, drawAxis, drawBars, drawMoments, drawPrayerDiagram, WINDOW_COLORS, xOf, tOf } from "./graph.js";
 import { skyFor } from "./sky.js";
 import { loadGeo, describePlace, zoneFor } from "./geo.js";
 import { mountMap } from "./map.js";
@@ -42,6 +42,9 @@ const state = {
   rows: [],
   hits: [],
   names: [],
+  moments: [],
+  markers: [],
+  labels: [],
   width: 0,
 };
 
@@ -137,7 +140,10 @@ function renderStatic() {
   const W = (state.width = plot.clientWidth);
   const fav = state.rows[0].method;
   const favAngles = [fav.fajr, fav.ishaInterval ? null : fav.isha].filter((a) => a != null);
-  drawGraph($("graph"), day, { width: W, height: GRAPH_H, favAngles });
+  const g = drawGraph($("graph"), day, { width: W, height: GRAPH_H, favAngles });
+  state.labels = g.labels;
+  state.moments = sunMoments(day);
+  state.markers = drawMoments($("graph"), day, state.moments, { width: W, height: GRAPH_H, favAngles });
   drawAxis($("axis"), day, spec(), { width: W, height: 18 });
   const b = drawBars($("bars"), day, state.rows, { width: W, fmt });
   state.hits = b.hits;
@@ -155,6 +161,8 @@ function renderCursor() {
   const rising = sunAltitude(t + MIN, lat, lon) > alt;
   $("angleNow").textContent = `${alt < 0 ? "−" : ""}${Math.abs(alt).toFixed(1)}°`;
   $("trend").textContent = rising ? "rising" : "setting";
+  const near = state.moments.find((m) => Math.abs(m.t - t) < 20000);
+  $("momentName").textContent = near ? near.name : "";
   $("clock").textContent = fmt(t);
   $("dateLabel").textContent = ymdText(day.ymd);
   $("dateInput").value = ymdIso(day.ymd);
@@ -231,7 +239,18 @@ function renderMoments() {
   const d = state.day;
   const box = $("moments");
   box.replaceChildren();
-  const row = (k, v, small, info) => {
+  const polarDay = !Number.isFinite(d.sunrise) && d.maxAlt > 0;
+  const polarNight = !Number.isFinite(d.sunrise) && d.maxAlt <= 0;
+  const timeBtn = (t) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "tbtn";
+    b.textContent = fmt(t);
+    b.setAttribute("aria-label", `Go to ${fmt(t)}`);
+    b.addEventListener("click", () => jumpTo(t, { scroll: true }));
+    return b;
+  };
+  const row = (k, val, small, info) => {
     const r = document.createElement("div");
     r.className = "moment-row";
     const kk = document.createElement("span");
@@ -241,26 +260,25 @@ function renderMoments() {
     if (info) { kk.append(" "); kk.append(infoBtn(info)); }
     const vv = document.createElement("span");
     vv.className = "v";
-    vv.textContent = v;
+    if (Array.isArray(val)) val.forEach((t, i) => { if (i) vv.append(text(" – ")); vv.append(timeBtn(t)); });
+    else vv.textContent = val;
     r.append(kk, vv);
     box.appendChild(r);
   };
-  const polarDay = !Number.isFinite(d.sunrise) && d.maxAlt > 0;
-  const polarNight = !Number.isFinite(d.sunrise) && d.maxAlt <= 0;
   const range = (a, angle) => {
-    if (Number.isFinite(a[0]) && Number.isFinite(a[1])) return `${fmt(a[0])} – ${fmt(a[1])}`;
+    if (Number.isFinite(a[0]) && Number.isFinite(a[1])) return a;
     if (d.minAlt > -angle) return "All night";
     if (d.maxAlt < -angle) return "Never ends";
     return "—";
   };
   const title = document.createElement("div");
   title.className = "card-title";
-  title.textContent = "Key moments";
+  title.textContent = "Key moments · tap a time to go there";
   box.appendChild(title);
-  row("Solar noon", fmt(d.noon));
   const none = polarDay ? "None · midnight sun" : polarNight ? "None · polar night" : "—";
-  row("Sunrise", Number.isFinite(d.sunrise) ? fmt(d.sunrise) : none, "", "refraction");
-  row("Sunset", Number.isFinite(d.sunset) ? fmt(d.sunset) : none);
+  row("Solar noon", [d.noon]);
+  row("Sunrise", Number.isFinite(d.sunrise) ? [d.sunrise] : none, "", "refraction");
+  row("Sunset", Number.isFinite(d.sunset) ? [d.sunset] : none);
   row("Day length", Number.isFinite(d.sunrise) && Number.isFinite(d.sunset) ? dur(d.sunset - d.sunrise) : polarDay ? "24 h" : polarNight ? "0 min" : "—");
   row("Civil twilight", range(d.civil, 6), "6°");
   row("Nautical twilight", range(d.nautical, 12), "12°");
@@ -336,6 +354,11 @@ function showPop(hit) {
     if (hit.est.why === "nosign") line(`Estimated: the sun doesn't get ${hit.est.angle}° below the horizon that night, so the ${rule} rule puts it ${share} of the night ${where}.`);
     else line(`Estimated: at ${hit.est.angle}° it would be ${fmt(hit.est.raw)}; the ${rule} rule caps it at ${share} of the night ${where}.`);
   }
+  const go = document.createElement("button");
+  go.className = "pop-more";
+  go.textContent = "Go to this moment";
+  go.addEventListener("click", () => jumpTo(hit.value));
+  pop.append(go);
   const topic = hit.key === "asrHanafi" || hit.key === "asr" ? "asr" : hit.est ? "summer" : r.method.explain;
   const more = document.createElement("button");
   more.className = "pop-more";
@@ -373,26 +396,226 @@ function onBarsClick(e) {
 // ---------- scrubbing ----------
 function setupScrub() {
   const g = $("graph");
-  let active = null;
-  const move = (e) => {
+  let drag = null;
+  const pos = (e) => {
     const r = g.getBoundingClientRect();
-    const x = Math.max(0, Math.min(r.width, e.clientX - r.left));
+    return { x: Math.max(0, Math.min(r.width, e.clientX - r.left)), y: e.clientY - r.top, w: r.width };
+  };
+  g.addEventListener("pointerdown", (e) => {
+    g.setPointerCapture(e.pointerId);
+    const p = pos(e);
+    drag = { id: e.pointerId, x0: p.x, moved: false };
+  });
+  g.addEventListener("pointermove", (e) => {
+    if (!drag || drag.id !== e.pointerId) return;
+    const p = pos(e);
+    if (!drag.moved && Math.abs(p.x - drag.x0) < 5) return;
+    drag.moved = true;
     state.live = false;
-    state.cursor = tOf(state.day, x, r.width);
+    state.cursor = tOf(state.day, p.x, p.w);
     hidePop();
     renderCursor();
-  };
-  g.addEventListener("pointerdown", (e) => { active = e.pointerId; g.setPointerCapture(e.pointerId); move(e); });
-  g.addEventListener("pointermove", (e) => { if (active === e.pointerId) move(e); });
-  const end = (e) => { if (active === e.pointerId) active = null; };
-  g.addEventListener("pointerup", end);
-  g.addEventListener("pointercancel", end);
+  });
+  g.addEventListener("pointerup", (e) => {
+    if (!drag || drag.id !== e.pointerId) return;
+    const wasDrag = drag.moved;
+    drag = null;
+    if (!wasDrag) onGraphTap(pos(e));
+  });
+  g.addEventListener("pointercancel", () => { drag = null; });
   g.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
     state.live = false;
     state.cursor = Math.max(state.day.start, Math.min(state.day.end, state.cursor + (e.key === "ArrowRight" ? 10 : -10) * MIN));
     renderCursor();
+  });
+}
+
+// A tap on the graph: an angle label jumps to that angle, a marker on the
+// curve jumps exactly to its moment, anywhere else goes to that time.
+function onGraphTap({ x, y, w }) {
+  if (x > w - 48) {
+    const lab = state.labels.find((l) => Math.abs(l.y - y) <= 9);
+    if (lab) { jumpToAngle(lab.angle); return; }
+  }
+  let best = null, bd = 22;
+  for (const m of state.markers) {
+    const d = Math.hypot(m.x - x, m.y - y);
+    if (d < bd) { bd = d; best = m; }
+  }
+  if (best) { jumpTo(best.m.t); return; }
+  jumpTo(tOf(state.day, x, w));
+}
+
+const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+function jumpTo(t, { scroll = false } = {}) {
+  state.live = false;
+  state.cursor = Math.max(state.day.start, Math.min(state.day.end, t));
+  hidePop();
+  renderCursor();
+  if (scroll) $("plot").scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
+}
+
+// The next time (after the cursor) the sun is `angle`° below the horizon.
+function jumpToAngle(angle) {
+  const { rising, setting } = timesAtAltitude(state.day, -angle);
+  const found = [rising, setting].filter(Number.isFinite);
+  if (!found.length) { toast(`The sun doesn't get ${angle}° below the horizon on this day.`); return; }
+  jumpTo(found.find((x) => x > state.cursor + 30000) ?? found[0]);
+}
+
+const degText = (v) => `${v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}°`;
+
+// Type an angle, see when the sun is there (rising and setting), jump.
+function openAngleSheet() {
+  const day = state.day;
+  const { lat, lon } = state.settings.place;
+  const now = sunAltitude(state.cursor, lat, lon);
+  let below = now < 0;
+  openSheet(({ title, body }) => {
+    title.textContent = "Go to an angle";
+    body.append(para("Type the sun's angle. The app finds when the sun is there on this day, in the morning and in the evening."));
+    const row = document.createElement("div");
+    row.className = "angle-input-row";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.inputMode = "decimal";
+    input.enterKeyHint = "go";
+    input.autocomplete = "off";
+    input.autofocus = true;
+    input.className = "angle-input";
+    input.setAttribute("aria-label", "Angle in degrees");
+    input.value = Math.abs(now).toFixed(1);
+    const unit = document.createElement("span");
+    unit.className = "angle-unit";
+    unit.textContent = "°";
+    row.append(input, unit);
+    const seg = document.createElement("div");
+    seg.className = "seg";
+    seg.setAttribute("role", "radiogroup");
+    const segBtn = (label, val) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("role", "radio");
+      b.textContent = label;
+      b.addEventListener("click", () => { below = val; update(); });
+      seg.appendChild(b);
+      return b;
+    };
+    const bBelow = segBtn("Below the horizon", true);
+    const bAbove = segBtn("Above the horizon", false);
+    const quick = document.createElement("div");
+    quick.className = "quick";
+    for (const [label, v] of [["Sunrise · sunset", 0.833], ["6°", 6], ["12°", 12], ["15°", 15], ["17°", 17], ["18°", 18], ["19.5°", 19.5]]) {
+      const c = document.createElement("button");
+      c.type = "button";
+      c.className = "chip";
+      c.textContent = label;
+      c.addEventListener("click", () => { input.value = String(v); below = true; update(); });
+      quick.appendChild(c);
+    }
+    const results = document.createElement("div");
+    results.className = "angle-results";
+    const note = para("", "note");
+    body.append(row, seg, quick, results, note);
+
+    const value = () => {
+      const s = input.value.trim().replace(",", ".").replace("−", "-");
+      if (s.startsWith("-")) below = true;
+      const v = Math.abs(parseFloat(s));
+      return Number.isFinite(v) ? Math.min(90, v) : null;
+    };
+    let found = [];
+    function update() {
+      bBelow.setAttribute("aria-checked", String(below));
+      bAbove.setAttribute("aria-checked", String(!below));
+      results.replaceChildren();
+      found = [];
+      const v = value();
+      const range = `from ${degText(day.minAlt)} to ${degText(day.maxAlt)}`;
+      if (v === null) { note.textContent = `Type a number between 0 and 90. On ${ymdText(day.ymd)} the sun goes ${range} here.`; return; }
+      const { rising, setting } = timesAtAltitude(day, below ? -v : v);
+      for (const [label, t] of [["Rising · morning", rising], ["Setting · evening", setting]]) {
+        if (!Number.isFinite(t)) continue;
+        found.push(t);
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "result";
+        const l = document.createElement("span");
+        l.textContent = label;
+        const tm = document.createElement("b");
+        tm.textContent = fmt(t);
+        b.append(l, tm);
+        b.addEventListener("click", () => { closeSheet(); jumpTo(t); });
+        results.appendChild(b);
+      }
+      note.textContent = found.length
+        ? `On ${ymdText(day.ymd)} the sun goes ${range} here.`
+        : `On ${ymdText(day.ymd)} the sun never gets ${v}° ${below ? "below" : "above"} the horizon here: it goes ${range}.`;
+    }
+    input.addEventListener("input", update);
+    input.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      if (!found.length) return;
+      const t = found.reduce((a, b) => (Math.abs(b - state.cursor) < Math.abs(a - state.cursor) ? b : a));
+      closeSheet();
+      jumpTo(t);
+    });
+    update();
+    requestAnimationFrame(() => { input.focus(); input.select(); });
+  });
+}
+
+// "How prayer times work": the five windows on today's curve, then the logic.
+function openPrayersGuide() {
+  const G = PRAYERS_GUIDE;
+  openSheet(({ title, body }) => {
+    title.textContent = G.title;
+    body.append(para(G.intro));
+    const day = state.day;
+    if (day && Number.isFinite(day.sunrise) && Number.isFinite(day.sunset)) {
+      const fav = byId[state.settings.fav];
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "diagram");
+      svg.setAttribute("role", "img");
+      svg.setAttribute("aria-label", "The five prayer windows on today's sun curve");
+      body.append(svg, para(`${ymdText(day.ymd)} at ${state.settings.place.name}, with ${fav.short}. A timetable gives the moment each window opens.`, "note"));
+      const times = methodTimes(fav, day, state.settings.highLat);
+      const draw = () => drawPrayerDiagram(svg, day, times, { width: Math.max(260, svg.clientWidth || body.clientWidth - 32), fmt });
+      requestAnimationFrame(draw);
+    }
+    for (const s of G.sections) {
+      const h = document.createElement("h3");
+      h.className = "guide-h";
+      if (s.key) {
+        const dot = document.createElement("span");
+        dot.className = "guide-dot";
+        dot.style.background = WINDOW_COLORS[s.key];
+        h.appendChild(dot);
+      }
+      h.append(text(s.title));
+      body.append(h);
+      for (const p of s.text) body.append(para(p));
+      if (s.more) {
+        const more = document.createElement("button");
+        more.type = "button";
+        more.className = "more-link";
+        more.textContent = `More: ${EXPLAIN[s.more].title} →`;
+        more.addEventListener("click", () => explain(s.more));
+        body.append(more);
+      }
+    }
+    const ul = document.createElement("ul");
+    ul.className = "links";
+    for (const [label, url] of G.links) {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = label;
+      li.appendChild(a); ul.appendChild(li);
+    }
+    body.append(ul);
   });
 }
 
@@ -564,6 +787,9 @@ function openSettings() {
     const updated = [RULES_UPDATED, TZ_RULES_UPDATED].sort().pop();
     const [y, m, d] = updated.split("-").map(Number);
     body.append(para(`Methods and time-zone rules last updated on ${dateLong.format(new Date(Date.UTC(y, m - 1, d, 12)))}. The times themselves are computed on this phone for any day.`));
+
+    body.append(h3("How prayer times work"));
+    body.append(button("Read the guide", "", () => openPrayersGuide()));
 
     body.append(h3("About"));
     body.append(para("Nothing you enter leaves this phone. Your place, favourite, summer rule and time zone are kept on this phone only. Works offline once opened."));
@@ -790,6 +1016,8 @@ function tick() {
 
 function init() {
   $("settingsBtn").addEventListener("click", openSettings);
+  $("guideBtn").addEventListener("click", openPrayersGuide);
+  $("angleBtn").addEventListener("click", () => state.day && openAngleSheet());
   $("placeBtn").addEventListener("click", () => openPlace());
   $("nowBtn").addEventListener("click", goLive);
   $("dateInput").addEventListener("change", (e) => onDatePicked(e.target.value));

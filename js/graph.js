@@ -72,9 +72,11 @@ export function drawGraph(svg, day, opts) {
   // (nudged apart if they are close); the others only where there is room.
   const MINGAP = 10;
   const placed = [];
+  const labels = [];
   const label = (a, yy, isFav) => {
     placed.push(yy);
-    const t = el("text", { x: W - 4, y: yy - 2.5, class: isFav ? "angle-label angle-label-fav" : "angle-label", "text-anchor": "end" }, svg);
+    labels.push({ angle: a, y: yy - 6 });
+    const t = el("text", { x: W - 4, y: yy - 2.5, class: isFav ? "angle-label angle-label-fav" : "angle-label", "text-anchor": "end", "data-angle": a }, svg);
     t.textContent = `${a}°`;
   };
   const favs = ANGLES.filter((a) => fav.has(a)).sort((a, b) => a - b).map((a) => ({ a, y: y(-a) }));
@@ -91,8 +93,63 @@ export function drawGraph(svg, day, opts) {
   }
   const h0 = el("text", { x: W - 4, y: y(0) - 3, class: "angle-label horizon-label", "text-anchor": "end" }, svg);
   h0.textContent = "0°";
-  return { y };
+  return { y, labels };
 }
+
+// Small markers on the curve for each named moment (sunrise, sunset, noon,
+// each twilight angle). Returns their positions for tap-to-jump.
+export function drawMoments(svg, day, moments, opts) {
+  const { width: W, height: H, favAngles = [] } = opts;
+  const frac = makeScale(day.minAlt, day.maxAlt);
+  svg.querySelector(".moments")?.remove();
+  const g = el("g", { class: "moments", "aria-hidden": "true" });
+  const sun = svg.querySelector(".sun");
+  svg.insertBefore(g, sun || null);
+  const fav = new Set(favAngles);
+  return moments.map((m) => {
+    const x = xOf(day, m.t, W), y = frac(m.alt) * H;
+    const strong = m.key === "noon" || m.angle === 0.833 || fav.has(m.angle);
+    el("circle", { cx: x, cy: y, r: strong ? 3.4 : 2.4, class: `moment${strong ? " moment-strong" : ""}${fav.has(m.angle) ? " moment-fav" : ""}` }, g);
+    return { x, y, m };
+  });
+}
+
+// The five prayer windows of one method on one day, under a small sun curve
+// (used by the "How prayer times work" page).
+export const WINDOW_COLORS = { fajr: "#8fb4ff", dhuhr: "#ffd27a", asr: "#ffb26b", maghrib: "#ff8f80", isha: "#b3a6ff" };
+export function drawPrayerDiagram(svg, day, times, opts) {
+  const { width: W, fmt } = opts;
+  const H = 120, TRACK = 128, total = 200;
+  svg.setAttribute("viewBox", `0 0 ${W} ${total}`);
+  svg.setAttribute("height", total);
+  svg.replaceChildren();
+  const frac = makeScale(day.minAlt, day.maxAlt);
+  const y = (a) => frac(a) * H;
+  const { lat, lon } = day.place;
+  el("rect", { x: 0, y: y(0), width: W, height: H - y(0), class: "dg-night" }, svg);
+  el("line", { x1: 0, x2: W, y1: y(0), y2: y(0), class: "dg-horizon" }, svg);
+  const pts = [];
+  for (let t = day.start; t <= day.end + 1; t += 10 * 60000) pts.push(`${xOf(day, t, W).toFixed(1)} ${y(sunAltitude(t, lat, lon)).toFixed(1)}`);
+  el("path", { d: "M" + pts.join("L"), class: "dg-curve" }, svg);
+  const wins = [
+    ["fajr", "Fajr", times.fajr, times.sunrise],
+    ["dhuhr", "Dhuhr", times.dhuhr, times.asr],
+    ["asr", "Asr", times.asr, times.maghrib],
+    ["maghrib", "Maghrib", times.maghrib, times.isha],
+    ["isha", "Isha", times.isha, day.end],
+  ];
+  el("line", { x1: 0, x2: W, y1: TRACK + 9, y2: TRACK + 9, class: "dg-track" }, svg);
+  wins.forEach(([k, name, a, b], i) => {
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return;
+    const x0 = xOf(day, a, W), x1 = Math.min(W, xOf(day, b, W));
+    el("rect", { x: x0, y: TRACK, width: Math.max(2, x1 - x0), height: 18, rx: 4, fill: WINDOW_COLORS[k], class: "dg-win" }, svg);
+    el("line", { x1: x0, x2: x0, y1: y(sunAltitude(a, lat, lon)), y2: TRACK, stroke: WINDOW_COLORS[k], class: "dg-tick" }, svg);
+    el("circle", { cx: x0, cy: y(sunAltitude(a, lat, lon)), r: 3.2, fill: WINDOW_COLORS[k] }, svg);
+    const lab = el("text", { x: Math.min(x0 + 2, W - 64), y: TRACK + 32 + (i % 3) * 14, class: "dg-label" }, svg);
+    lab.textContent = `${name} ${fmt(a)}`;
+  });
+}
+
 
 // Sun dot at an instant.
 export function drawSun(svg, day, t, opts) {
