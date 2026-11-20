@@ -40,11 +40,12 @@ export const EXPLAIN = {
   gmp: {
     title: "Grande Mosquée de Paris",
     body: [
-      "This bar follows the mosque's own Ramadan 2026 timetable for Paris: Imsak when the sun is about 18° below the horizon, Fajr 10 minutes later, Dhuhr 5 minutes after noon, Asr 1 minute after the standard time, Maghrib 3 minutes after sunset, and Isha 1 h 30 after sunset.",
-      "On all 30 days of that timetable this rule gives the same Sunrise, Dhuhr, Asr, Maghrib and Isha to the minute. Fajr is within 4 minutes: late in Ramadan the mosque's Imsak drifts a little later than 18°. In June, when Paris never gets 18° below the horizon, the angle-based summer rule sets the Imsak. Plain 18° for both Fajr and Isha is the Karachi bar.",
+      "This bar follows the mosque's own published timetables for Paris (Ramadan 2026 and November 2026): Dhuhr 5 minutes after solar noon, the standard Asr, Maghrib 3 minutes after sunset, and Isha 1 h 30 after sunset. On all 60 days of those timetables this gives the same Sunrise, Dhuhr, Asr, Maghrib and Isha within a minute.",
+      "The mosque does not publish the angle it uses for Fajr. Placing Fajr when the sun is 16° below the horizon reproduces both timetables within 3 minutes. In its Ramadan timetable an Imsak column comes 10 minutes before Fajr. In summer, if the sun's angle gives an unusable time, the angle-based summer rule applies. Plain 18° for both Fajr and Isha is the Karachi bar.",
     ],
     links: [
-      ["The mosque's Ramadan 2026 timetable", "https://www.grandemosqueedeparis.fr/post/emsakiat-ramadan-2026-1447-h-le-calendrier-des-heures-de-priere-a-paris"],
+      ["The mosque's prayer times page", "https://www.grandemosqueedeparis.fr/horaire-des-prieres-paris"],
+      ["Its Ramadan 2026 timetable", "https://www.grandemosqueedeparis.fr/post/emsakiat-ramadan-2026-1447-h-le-calendrier-des-heures-de-priere-a-paris"],
       ["The mosque keeps 18° (Saphirnews)", "https://www.saphirnews.com/La-Grande-Mosquee-de-Paris-garde-le-18e-degre-de-latitude-pour-les-horaires-de-priere_a14937.html"],
     ],
   },
@@ -63,8 +64,8 @@ export const EXPLAIN = {
   morocco: {
     title: "The Moroccan convention",
     body: [
-      "Morocco's Ministry of Habous and Islamic Affairs publishes the official times: Fajr at 19°, Isha at 17°, Dhuhr 5 minutes after solar noon, Maghrib 5 minutes after sunset, and the standard (Maliki) Asr.",
-      "Checked against the published timetables of Casablanca, Marrakech, Fès and Agadir for November 2026: all within a minute. Since 20 September 2026 Morocco stays on UTC+0 all year (decree 2.26.530), with no change for Ramadan.",
+      "Morocco's Ministry of Habous and Islamic Affairs publishes the official times: Fajr at 19°, Isha at 17°, Dhuhr 5 minutes after solar noon, Maghrib 5 minutes after sunset, the standard (Maliki) Asr, and sunrise (Chourouq) 3 minutes before the astronomical sunrise.",
+      "Checked against the published timetables for November 2026 (Casablanca for the whole month, Marrakech, Fès, Agadir): all six times within a minute. Since 20 September 2026 Morocco stays on UTC+0 all year (decree 2.26.530), with no change for Ramadan.",
     ],
     links: [["Ministry of Habous", "https://www.habous.gov.ma/"], ["Moroccan timetables", "https://horaire-de-priere.ma/horaire-priere-casablanca.html"]],
   },

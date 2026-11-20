@@ -17,7 +17,10 @@ export const METHODS = [
     name: "Morocco · Ministry of Habous",
     fajr: 19,
     isha: 17,
-    offsets: { dhuhr: 5, maghrib: 5 },
+    // Sunrise (Chourouq) is published 3 minutes before the astronomical
+    // sunrise: with it, Casablanca's whole November 2026 timetable matches
+    // within a minute for all six times.
+    offsets: { sunrise: -3, dhuhr: 5, maghrib: 5 },
     highLat: "angle",
     explain: "morocco",
   },
@@ -43,13 +46,14 @@ export const METHODS = [
     id: "gmp",
     short: "Paris Mosque",
     name: "Grande Mosquée de Paris",
-    // Its own Ramadan 2026 timetable for Paris: Imsak at about 18°, Fajr 10
-    // minutes later, Dhuhr +5, Asr +1, Maghrib = sunset + 3, Isha = sunset + 90
-    // (Maghrib + 87). Sunrise to Isha match it to the minute on all 30 days;
-    // Fajr within 4 minutes (their Imsak drifts later than 18° in March).
-    fajr: 18,
+    // Fitted on the mosque's own timetables for Paris (Ramadan 2026, 30 days,
+    // and November 2026, 30 days). Sunrise, Dhuhr (+5), Asr (standard),
+    // Maghrib (sunset + 3) and Isha (sunset + 90 = Maghrib + 87) match within a
+    // minute on all 60 days. The mosque publishes no angle for Fajr: 16° fits
+    // both within 3 minutes (18° + 10 min drifted up to 6).
+    fajr: 16,
     ishaInterval: 87,
-    offsets: { fajr: 10, dhuhr: 5, asr: 1, maghrib: 3 },
+    offsets: { dhuhr: 5, maghrib: 3 },
     highLat: "angle",
     explain: "gmp",
   },

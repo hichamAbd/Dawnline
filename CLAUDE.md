@@ -27,10 +27,10 @@ The owner is not a developer and works from an iPhone. Write to him in short, pl
 
 | Method | Rule |
 |---|---|
-| Morocco (Habous) | 19° / 17°, Dhuhr +5, Maghrib +5, standard Asr |
+| Morocco (Habous) | 19° / 17°, sunrise −3, Dhuhr +5, Maghrib +5, standard Asr. Casablanca's whole November 2026 timetable matches within a minute for all six times (tested). |
 | France 12° (Musulmans de France) | 12° / 12° |
 | France 15° | 15° / 15° |
-| Grande Mosquée de Paris | Its own Ramadan 2026 timetable: Fajr = 18° + 10 min (Imsak at 18°), Dhuhr +5, Asr +1, Maghrib +3, Isha = sunset + 90 (Maghrib + 87). Owner chose this over plain 18°/18° (which is the Karachi bar). Matches all 30 days to the minute except Fajr (within 4 min: their Imsak drifts later than 18° in March). |
+| Grande Mosquée de Paris | Its own timetables (owner chose this over plain 18°/18°, which is the Karachi bar), fitted on Ramadan 2026 (30 days) and November 2026 (30 days): Fajr 16° (no published angle; within 3 min on all 60 days, while 18° + 10 min drifted up to 6), Dhuhr +5, standard Asr, Maghrib +3, Isha = sunset + 90 (Maghrib + 87). Sunrise to Isha within 1 min on all 60 days. Its Ramadan timetable also shows Imsak = Fajr − 10. |
 | Istanbul 2021 | 18° / 17°, one third of the night. Diyanet's own French tables do NOT follow it (Isha ≈ 16° all year; an unpublished summer pull-in north of ~48° from late April to mid-August). Could not be reproduced; said in the bar's explanation. The 5-hour minimum (only above ~60°) is not modelled. |
 | MWL | 18° / 17° |
 | Umm al-Qura | 18.5° / Isha = Maghrib + 90 (120 in Ramadan, detected with the browser's islamic-umalqura calendar) |
@@ -69,7 +69,7 @@ From the owner, ±1 min unless noted:
 - Diyanet, Kütahya (39.4167, 29.9833), 27 Jul 2026, UTC+3, ±2 min: 04:06 05:48 13:12 17:05 20:25 22:01.
 - Diyanet, L'Aigle (48.7656, 0.6286), 28 Jul 2026: Diyanet publishes 04:33 06:19 14:09 18:16 21:50 23:18; not reproducible, Istanbul 2021 bar gives 03:53 / 00:00 (tested).
 
-Added: Diyanet's whole 2026 Kütahya year (±2), the Grande Mosquée's 30-day Ramadan 2026 timetable (±1, Fajr ±4), no 18° twilight in Paris 12–30 June and Lille 28 May–16 July, Umm al-Qura Ramadan interval, midnight sun (Tromsø), time-zone overrides.
+Added: Diyanet's whole 2026 Kütahya year (±2), the Grande Mosquée's Ramadan and November 2026 timetables (±1, Fajr ±3), Casablanca's whole November 2026 timetable (±1, all six), no 18° twilight in Paris 12–30 June and Lille 28 May–16 July, Umm al-Qura Ramadan interval, midnight sun (Tromsø), time-zone overrides.
 
 Also check in a headless browser at 390 px and 320 px, light and dark, before publishing (Playwright is preinstalled in sessions).
 
@@ -89,13 +89,17 @@ Single branch `gh-pages`, pushed straight (standing permission). Before saying i
 
 ## Monthly maintenance
 
-A scheduled task runs on the 1st of each month (early morning Paris time). Each run starts fresh: it attaches and clones this repo with push access, reads this file, then:
-1. Time zones: checks the IANA releases (https://www.iana.org/time-zones/releases, or https://github.com/eggert/tz/blob/main/NEWS) and https://www.timeanddate.com/news/time/ for announced changes affecting France, Morocco or any country in `COUNTRY_ZONES`; adds them to `TZ_OVERRIDES` with their start date, keeping older entries.
-2. Conventions: compares the coming month's computed times with the latest published ones, official sources first (Habous, Musulmans de France, Grande Mosquée de Paris, Diyanet, Umm al-Qura); if a body changed its angles or minutes, or announced a change, updates that method, its explanation and its tests.
-3. If something changed: all tests, a dated line below, `RULES_UPDATED` / `TZ_RULES_UPDATED`, bump `CACHE` in `sw.js`, push to `gh-pages`, confirm the Pages build, push notification to the owner (what, why, source link).
-4. If nothing changed: no commit, no notification, a one-line report.
-5. Never changes anything else (design, features); if something needs a decision, it notifies the owner instead.
+A scheduled task ("Dawnline monthly rules check", 1st of each month, 04:34 Paris time) wakes one dedicated cloud session, also called "Dawnline monthly rules check", which was created with this repository as its source so it can push to `gh-pages` (a fresh session per run could not: the git proxy only gives push access to a session's own sources). The session keeps its memory between runs. Each run:
+1. Brings its checkout up to date with `origin/gh-pages` and re-reads this file.
+2. Time zones: checks the IANA releases (https://www.iana.org/time-zones/releases, https://github.com/eggert/tz/blob/main/NEWS) and https://www.timeanddate.com/news/time/ for announced changes affecting France, Morocco or any country in `COUNTRY_ZONES`; adds them to `TZ_OVERRIDES` with their start date, keeping older entries.
+3. Conventions: compares the coming month's computed times with the latest published ones, official sources first (Habous, Musulmans de France via bladi.net, Grande Mosquée de Paris, Diyanet, Umm al-Qura); if a body changed its angles or minutes, or announced a change, updates that method, its explanation and its tests.
+4. If something changed: all tests, a dated line below, `RULES_UPDATED` / `TZ_RULES_UPDATED`, bump `CACHE` in `sw.js`, push to `gh-pages`, confirm the Pages build, push notification to the owner (what, why, source link).
+5. If nothing changed: no commit, no notification, a one-line report.
+6. Never changes anything else (design, features); if something needs a decision, it notifies the owner instead.
+
+If that session is ever archived or lost, create a new one with this repository (branch `gh-pages`) as its source in the same cloud environment, and point the scheduled task at it.
 
 ## Maintenance log
 
 - 2026-11-20: first version. Morocco back on UTC+0 since 2026-09-20 (IANA tzdata 2026c+). Paris Mosque rule from its Ramadan 2026 timetable. Diyanet offsets from its 2026 Kütahya table.
+- 2026-11-20 (later): first monthly-check test run found the Paris Mosque's November 2026 timetable and Casablanca's sunrise off by a few minutes. Paris Mosque refitted on its Ramadan + November timetables (Fajr 16°, standard Asr); Morocco sunrise −3. Monthly check moved to a dedicated session with push access. Cache `dawnline-v2`.

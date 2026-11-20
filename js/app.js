@@ -752,7 +752,7 @@ function chooseConvention(fromMap) {
       const opts = [
         ["france12", "12° · Musulmans de France", "The most widespread French calendar"],
         ["france15", "15°", "Used by some mosques"],
-        ["gmp", "Grande Mosquée de Paris", "Its own timetable: Fajr at 18° + 10 min"],
+        ["gmp", "Grande Mosquée de Paris", "Its own timetable: Isha 1 h 30 after sunset"],
         ["istanbul", "Istanbul 2021", "Diyanet and the European Council for Fatwa"],
       ];
       for (const [id, l, sub] of opts) body.append(choice(l, sub, false, () => { state.settings.fav = id; finish(); }));

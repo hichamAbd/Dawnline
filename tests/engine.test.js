@@ -85,14 +85,25 @@ test("Diyanet, Kütahya: every day of 2026 within 2 minutes", () => {
   }
 });
 
-test("Grande Mosquée de Paris, Ramadan 2026 timetable (30 days)", () => {
-  const data = fixture("gmp-ramadan-2026.json");
+for (const f of ["gmp-ramadan-2026.json", "gmp-november-2026.json"]) {
+  test(`Grande Mosquée de Paris, its own timetable (${f})`, () => {
+    const data = fixture(f);
+    for (const r of data.rows) {
+      const [y, m, d] = r.date.split("-").map(Number);
+      const t = methodTimes(M.gmp, sunDay(data.place, { y, m, d }, PARIS));
+      for (const k of ["sunrise", "dhuhr", "asr", "maghrib", "isha"]) near(hhmm(PARIS, t[k]), r[k], 1, `${r.date} ${k}`);
+      // No published Fajr angle: 16° fits both timetables within 3 minutes.
+      near(hhmm(PARIS, t.fajr), r.fajr, 3, `${r.date} fajr`);
+    }
+  });
+}
+
+test("Morocco, Casablanca, whole November 2026 timetable (all six times)", () => {
+  const data = fixture("morocco-casablanca-2026-11.json");
   for (const r of data.rows) {
     const [y, m, d] = r.date.split("-").map(Number);
-    const t = methodTimes(M.gmp, sunDay(data.place, { y, m, d }, PARIS));
-    for (const k of ["sunrise", "dhuhr", "asr", "maghrib", "isha"]) near(hhmm(PARIS, t[k]), r[k], 1, `${r.date} ${k}`);
-    // Their Imsak drifts up to ~3 min later than 18° by mid-March: Fajr ±4.
-    near(hhmm(PARIS, t.fajr), r.fajr, 4, `${r.date} fajr`);
+    const t = methodTimes(M.morocco, sunDay(data.place, { y, m, d }, MOROCCO));
+    for (const k of ["fajr", "sunrise", "dhuhr", "asr", "maghrib", "isha"]) near(hhmm(MOROCCO, t[k]), r[k], 1, `${r.date} ${k}`);
   }
 });
 
