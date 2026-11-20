@@ -472,7 +472,9 @@ function openAngleSheet() {
   const day = state.day;
   const { lat, lon } = state.settings.place;
   const now = sunAltitude(state.cursor, lat, lon);
-  let below = now < 0;
+  // Twilight angles are what people type, so "below the horizon" is the
+  // default; the current angle is prefilled only when the sun is below.
+  let below = true;
   openSheet(({ title, body }) => {
     title.textContent = "Go to an angle";
     body.append(para("Type the sun's angle. The app finds when the sun is there on this day, in the morning and in the evening."));
@@ -486,7 +488,8 @@ function openAngleSheet() {
     input.autofocus = true;
     input.className = "angle-input";
     input.setAttribute("aria-label", "Angle in degrees");
-    input.value = Math.abs(now).toFixed(1);
+    input.value = now < 0 ? Math.abs(now).toFixed(1) : "";
+    input.placeholder = "18";
     const unit = document.createElement("span");
     unit.className = "angle-unit";
     unit.textContent = "°";

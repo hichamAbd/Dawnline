@@ -106,4 +106,4 @@ If that session is ever archived or lost, create a new one with this repository 
 
 - 2026-11-20: first version. Morocco back on UTC+0 since 2026-09-20 (IANA tzdata 2026c+). Paris Mosque rule from its Ramadan 2026 timetable. Diyanet offsets from its 2026 Kütahya table.
 - 2026-11-20 (later): first monthly-check test run found the Paris Mosque's November 2026 timetable and Casablanca's sunrise off by a few minutes. Paris Mosque refitted on its Ramadan + November timetables (Fajr 16°, standard Asr); Morocco sunrise −3. Monthly check moved to a dedicated session with push access. Cache `dawnline-v2`.
-- 2026-11-20 (evening): added typing an angle, tap-to-jump moments on the graph and in Key moments, and the "How prayer times work" page. Cache `dawnline-v3`. No rule changed.
+- 2026-11-20 (evening): added typing an angle, tap-to-jump moments on the graph and in Key moments, and the "How prayer times work" page. Cache `dawnline-v4`. No rule changed. Typing an angle defaults to "below the horizon".
