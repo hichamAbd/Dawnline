@@ -4,7 +4,7 @@
 // next time the app is opened online, and the page reloads itself once.
 // The name starts with "dawnline-" because all the owner's apps share one
 // web address and its browser storage.
-const CACHE = "dawnline-v5";
+const CACHE = "dawnline-v6";
 
 const FILES = [
   "./",

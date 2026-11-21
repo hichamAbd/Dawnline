@@ -483,7 +483,7 @@ function openAngleSheet() {
   // Twilight angles are what people type, so "below the horizon" is the
   // default; the current angle is prefilled only when the sun is below.
   let below = true;
-  openSheet(({ title, body }) => {
+  openSheet(({ title, body, setDone }) => {
     title.textContent = "Go to an angle";
     body.append(para("Type the sun's angle, or pick a prayer below."));
     const row = document.createElement("div");
@@ -568,6 +568,7 @@ function openAngleSheet() {
       return Number.isFinite(v) ? Math.min(90, v) : null;
     };
     let found = [];
+    const nearest = (list) => list.reduce((a, b) => (Math.abs(b - state.cursor) < Math.abs(a - state.cursor) ? b : a));
     function update() {
       bBelow.setAttribute("aria-checked", String(below));
       bAbove.setAttribute("aria-checked", String(!below));
@@ -575,14 +576,23 @@ function openAngleSheet() {
       found = [];
       const v = value();
       const range = `from ${degText(day.minAlt)} to ${degText(day.maxAlt)}`;
-      if (v === null) { note.textContent = `Type a number between 0 and 90. On ${ymdText(day.ymd)} the sun goes ${range} here.`; return; }
+      if (v === null) {
+        setDone(null, null);
+        note.textContent = `Type a number between 0 and 90. On ${ymdText(day.ymd)} the sun goes ${range} here.`;
+        return;
+      }
       const { rising, setting } = timesAtAltitude(day, below ? -v : v);
+      const both = [rising, setting].filter(Number.isFinite);
+      // The top-right button goes to the crossing nearest the time shown.
+      const target = both.length ? nearest(both) : null;
+      if (target !== null) setDone(`Go to ${fmt(target)}`, () => jumpTo(target));
+      else setDone(null, null);
       for (const [label, t] of [["Rising · morning", rising], ["Setting · evening", setting]]) {
         if (!Number.isFinite(t)) continue;
         found.push(t);
         const b = document.createElement("button");
         b.type = "button";
-        b.className = "result";
+        b.className = t === target ? "result result-default" : "result";
         const l = document.createElement("span");
         l.textContent = label;
         const tm = document.createElement("b");
@@ -600,7 +610,7 @@ function openAngleSheet() {
       if (e.key !== "Enter") return;
       e.preventDefault();
       if (!found.length) return;
-      const t = found.reduce((a, b) => (Math.abs(b - state.cursor) < Math.abs(a - state.cursor) ? b : a));
+      const t = nearest(found);
       closeSheet();
       jumpTo(t);
     });
@@ -699,18 +709,32 @@ function renderSheet() {
   head.className = "sheet-head";
   const h = document.createElement("h2");
   head.appendChild(h);
+  let done = null;
+  top.doneAction = null;
   if (top.closable) {
-    const done = document.createElement("button");
+    done = document.createElement("button");
     done.className = "chip";
     done.textContent = stack.length > 1 ? "Back" : "Done";
-    done.addEventListener("click", closeSheet);
+    done.addEventListener("click", () => {
+      const act = top.doneAction;
+      closeSheet();
+      if (act) act();
+    });
     head.appendChild(done);
   }
   inner.appendChild(head);
   const body = document.createElement("div");
   body.className = "sheet-body";
   inner.appendChild(body);
-  top.cleanup = top.build({ title: h, body, inner, head });
+  // A sheet can turn its top-right button into its main action
+  // (e.g. "Go to 06:34"); with no action it just closes.
+  const setDone = (label, action) => {
+    top.doneAction = action || null;
+    if (!done) return;
+    done.textContent = label || (stack.length > 1 ? "Back" : "Done");
+    done.classList.toggle("chip-now", !!action);
+  };
+  top.cleanup = top.build({ title: h, body, inner, head, setDone });
 }
 function closeSheet() {
   const dlg = $("sheet");
