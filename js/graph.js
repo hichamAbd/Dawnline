@@ -169,7 +169,7 @@ export function drawSun(svg, day, t, opts) {
 
 // Hour ticks along the time axis.
 export function drawAxis(svg, day, spec, opts) {
-  const { width: W, height: H } = opts;
+  const { width: W, height: H, caption } = opts;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.replaceChildren();
   // first whole local hour after start
@@ -180,9 +180,30 @@ export function drawAxis(svg, day, spec, opts) {
     if (lp.hh % 3 !== 0) continue;
     const x = xOf(day, t, W);
     if (x < 10 || x > W - 10) continue;
-    const tx = el("text", { x, y: H - 4, class: "axis-label", "text-anchor": "middle" }, svg);
+    const tx = el("text", { x, y: 13, class: "axis-label", "text-anchor": "middle" }, svg);
     tx.textContent = String(lp.hh).padStart(2, "0");
   }
+  if (caption) {
+    const c = el("text", { x: 2, y: H - 7, class: "axis-caption" }, svg);
+    c.textContent = caption;
+  }
+}
+
+// The vertical "now" line, drawn inside each SVG (graph, axis, bars) so it
+// renders like the rest of the graph in every browser; stacked SVGs make it
+// one unbroken line. Dashed while scrubbing.
+export function placeNowLine(svg, x, height, dashed) {
+  let l = svg.querySelector("line.nowline-svg");
+  if (!l) {
+    l = el("line", { class: "nowline-svg" });
+    svg.insertBefore(l, svg.querySelector("g.sun"));
+  }
+  const xs = x.toFixed(1);
+  l.setAttribute("x1", xs);
+  l.setAttribute("x2", xs);
+  l.setAttribute("y1", 0);
+  l.setAttribute("y2", height);
+  l.classList.toggle("nowline-scrub", dashed);
 }
 
 // One bar per method. rows: [{ method, times, fav }]. Returns hit targets

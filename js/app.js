@@ -5,7 +5,7 @@ import { EXPLAIN, PRAYERS_GUIDE } from "./data/explain.js";
 import { sunDay, methodTimes, PRAYERS, PRAYER_NAMES, sunMoments, timesAtAltitude } from "./prayer.js";
 import { hhmm, offsetAt, offsetLabel, localParts, zonedToUtc } from "./tz.js";
 import { sunAltitude } from "./astro.js";
-import { drawGraph, drawSun, drawAxis, drawBars, drawMoments, drawPrayerDiagram, WINDOW_COLORS, xOf, tOf } from "./graph.js";
+import { drawGraph, drawSun, drawAxis, drawBars, drawMoments, drawPrayerDiagram, placeNowLine, WINDOW_COLORS, xOf, tOf } from "./graph.js";
 import { skyFor } from "./sky.js";
 import { loadGeo, describePlace, zoneFor } from "./geo.js";
 import { mountMap } from "./map.js";
@@ -14,6 +14,7 @@ const KEY = "dawnline-settings";
 const MIN = 60000;
 const DAY = 86400000;
 const GRAPH_H = 250;
+const AXIS_H = 40;
 const $ = (id) => document.getElementById(id);
 const byId = Object.fromEntries(METHODS.map((m) => [m.id, m]));
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
@@ -144,8 +145,9 @@ function renderStatic() {
   state.labels = g.labels;
   state.moments = sunMoments(day);
   state.markers = drawMoments($("graph"), day, state.moments, { width: W, height: GRAPH_H, favAngles });
-  drawAxis($("axis"), day, spec(), { width: W, height: 18 });
+  drawAxis($("axis"), day, spec(), { width: W, height: AXIS_H, caption: "METHODS · TAP A MARK" });
   const b = drawBars($("bars"), day, state.rows, { width: W, fmt });
+  state.barsHeight = b.height;
   state.hits = b.hits;
   state.names = b.names;
   $("graph").setAttribute("aria-label", `Sun altitude through ${ymdText(day.ymd)} at ${place.name}`);
@@ -161,15 +163,20 @@ function renderCursor() {
   const rising = sunAltitude(t + MIN, lat, lon) > alt;
   $("angleNow").textContent = `${alt < 0 ? "−" : ""}${Math.abs(alt).toFixed(1)}°`;
   $("trend").textContent = rising ? "rising" : "setting";
+  // Name the moment the cursor sits on: a prayer of the favourite first,
+  // otherwise a named sun moment (sunrise, nautical dawn...).
+  const favRow = state.rows[0];
+  const k = PRAYERS.find((p) => Number.isFinite(favRow.times[p]) && Math.abs(favRow.times[p] - t) < 20000);
   const near = state.moments.find((m) => Math.abs(m.t - t) < 20000);
-  $("momentName").textContent = near ? near.name : "";
+  $("momentName").textContent = k ? `${PRAYER_NAMES[k]} · ${favRow.method.short}` : near ? near.name : "";
   $("clock").textContent = fmt(t);
   $("dateLabel").textContent = ymdText(day.ymd);
   $("dateInput").value = ymdIso(day.ymd);
   $("nowBtn").hidden = state.live;
-  const nl = $("nowline");
-  nl.style.left = `${xOf(day, t, state.width)}px`;
-  nl.classList.toggle("scrub", !state.live);
+  const x = xOf(day, t, state.width);
+  placeNowLine($("graph"), x, GRAPH_H, !state.live);
+  placeNowLine($("axis"), x, AXIS_H, !state.live);
+  placeNowLine($("bars"), x, state.barsHeight || 0, !state.live);
   paintSky(alt);
   renderPassed(t);
 }
@@ -468,6 +475,7 @@ function jumpToAngle(angle) {
 const degText = (v) => `${v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}°`;
 
 // Type an angle, see when the sun is there (rising and setting), jump.
+// Or pick a prayer of the favourite: its angle is set and the view jumps there.
 function openAngleSheet() {
   const day = state.day;
   const { lat, lon } = state.settings.place;
@@ -477,7 +485,7 @@ function openAngleSheet() {
   let below = true;
   openSheet(({ title, body }) => {
     title.textContent = "Go to an angle";
-    body.append(para("Type the sun's angle. The app finds when the sun is there on this day, in the morning and in the evening."));
+    body.append(para("Type the sun's angle, or pick a prayer below."));
     const row = document.createElement("div");
     row.className = "angle-input-row";
     const input = document.createElement("input");
@@ -485,7 +493,6 @@ function openAngleSheet() {
     input.inputMode = "decimal";
     input.enterKeyHint = "go";
     input.autocomplete = "off";
-    input.autofocus = true;
     input.className = "angle-input";
     input.setAttribute("aria-label", "Angle in degrees");
     input.value = now < 0 ? Math.abs(now).toFixed(1) : "";
@@ -508,6 +515,10 @@ function openAngleSheet() {
     };
     const bBelow = segBtn("Below the horizon", true);
     const bAbove = segBtn("Above the horizon", false);
+    const results = document.createElement("div");
+    results.className = "angle-results";
+    const note = para("", "note");
+
     const quick = document.createElement("div");
     quick.className = "quick";
     for (const [label, v] of [["Sunrise · sunset", 0.833], ["6°", 6], ["12°", 12], ["15°", 15], ["17°", 17], ["18°", 18], ["19.5°", 19.5]]) {
@@ -518,10 +529,37 @@ function openAngleSheet() {
       c.addEventListener("click", () => { input.value = String(v); below = true; update(); });
       quick.appendChild(c);
     }
-    const results = document.createElement("div");
-    results.className = "angle-results";
-    const note = para("", "note");
-    body.append(row, seg, quick, results, note);
+
+    // Prayers of the favourite: name, time and the sun's angle at that time.
+    const fav = state.rows[0];
+    const grid = document.createElement("div");
+    grid.className = "prayer-grid";
+    for (const k of PRAYERS) {
+      const tm = fav.times[k];
+      if (!Number.isFinite(tm)) continue;
+      const a = sunAltitude(tm, lat, lon);
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "prayer-cell";
+      b.setAttribute("aria-label", `${PRAYER_NAMES[k]}, ${fmt(tm)}, sun at ${degText(a)}`);
+      const n = document.createElement("b");
+      n.textContent = PRAYER_NAMES[k];
+      const tt = document.createElement("span");
+      tt.textContent = fmt(tm);
+      const aa = document.createElement("small");
+      aa.textContent = degText(a) + (fav.times.est && fav.times.est[k] ? " · est." : "");
+      b.append(n, tt, aa);
+      b.addEventListener("click", () => {
+        input.value = Math.abs(a).toFixed(1);
+        below = a < 0;
+        update();
+        closeSheet();
+        jumpTo(tm);
+      });
+      grid.appendChild(b);
+    }
+
+    body.append(row, seg, results, note, h3("Angles"), quick, h3(`Prayers · ★ ${fav.method.short}`), grid);
 
     const value = () => {
       const s = input.value.trim().replace(",", ".").replace("−", "-");
@@ -567,7 +605,6 @@ function openAngleSheet() {
       jumpTo(t);
     });
     update();
-    requestAnimationFrame(() => { input.focus(); input.select(); });
   });
 }
 
