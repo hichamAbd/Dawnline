@@ -252,3 +252,47 @@ export function drawBars(svg, day, rows, opts) {
   svg.setAttribute("height", yy);
   return { hits, names, height: yy };
 }
+
+// Day length through a year centred on index c of a yearSeries: sunrise to
+// sunset (white) and Fajr to Maghrib (gold), hours 0-24, today marked.
+export function drawYearChart(svg, series, c, opts) {
+  const { width: W } = opts;
+  const H = 180, top = 10, bottom = 22, left = 30;
+  const plotW = W - left - 4, plotH = H - top - bottom;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("height", H);
+  svg.replaceChildren();
+  const i0 = Math.max(0, c - 182), i1 = Math.min(series.length - 1, c + 182);
+  const x = (i) => left + ((i - i0) / (i1 - i0)) * plotW;
+  const y = (ms) => top + (1 - ms / 86400000) * plotH;
+  for (const h of [0, 6, 12, 18, 24]) {
+    el("line", { x1: left, x2: W - 4, y1: y(h * 3600000), y2: y(h * 3600000), class: h % 24 ? "yr-grid" : "yr-grid yr-grid-edge" }, svg);
+    if (h % 24) { const t = el("text", { x: left - 6, y: y(h * 3600000) + 3.5, class: "yr-label", "text-anchor": "end" }, svg); t.textContent = `${h} h`; }
+  }
+  const initials = "JFMAMJJASOND";
+  for (let i = i0; i <= i1; i++) {
+    if (series[i].ymd.d !== 1) continue;
+    el("line", { x1: x(i), x2: x(i), y1: top + plotH, y2: top + plotH + 4, class: "yr-tick" }, svg);
+    const t = el("text", { x: x(i) + 2, y: H - 6, class: "yr-label" }, svg);
+    t.textContent = initials[series[i].ymd.m - 1];
+  }
+  const path = (key) => {
+    let d = "", pen = false;
+    for (let i = i0; i <= i1; i++) {
+      const v = series[i][key];
+      if (!Number.isFinite(v)) { pen = false; continue; }
+      d += `${pen ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`;
+      pen = true;
+    }
+    return d;
+  };
+  const dayPath = path("dayLen");
+  el("path", { d: `${dayPath}L${x(i1)} ${y(0)}L${x(i0)} ${y(0)}Z`, class: "yr-fill" }, svg);
+  el("path", { d: dayPath, class: "yr-day" }, svg);
+  el("path", { d: path("fast"), class: "yr-fast" }, svg);
+  el("line", { x1: x(c), x2: x(c), y1: top, y2: top + plotH, class: "yr-today" }, svg);
+  for (const [key, cls] of [["dayLen", "yr-dot"], ["fast", "yr-dot yr-dot-fast"]]) {
+    const v = series[c][key];
+    if (Number.isFinite(v)) el("circle", { cx: x(c), cy: y(v), r: 4.5, class: cls }, svg);
+  }
+}

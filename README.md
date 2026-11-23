@@ -9,6 +9,7 @@ Where the sun is, and what each Islamic prayer-time convention gives for every p
 ## What it does
 
 - A sun graph for any place and day: the sun's height through the day, the horizon, and dashed lines at every twilight angle the methods use (12° to 19.5°). Drag along it to move through the day; tap a marker (sunrise, sunset, noon, each twilight angle) or an angle label to jump exactly there; type an angle to see when the sun reaches it; pick any date; tap Now to go back.
+- "Day and night": how far today is from the longest and shortest days, whether days are getting longer or shorter, and the same counted the Islamic way (each day from Maghrib to Maghrib: its night, then its fasting day), with the Hijri date and the earliest and latest Fajr, Maghrib and Isha of the coming year.
 - "How prayer times work": the five prayer windows on today's sun curve, and what marks the start and end of each prayer, with sources.
 - The sun's angle at that moment, and which methods' Fajr or Isha have already begun.
 - One bar per method on the same time axis: Morocco (Habous), France 12° (Musulmans de France), France 15°, Grande Mosquée de Paris, Istanbul 2021, Muslim World League, Umm al-Qura, ISNA, Egypt, Karachi and Diyanet. Your favourite comes first with its times written; tap any mark for its time and its gap from your favourite.

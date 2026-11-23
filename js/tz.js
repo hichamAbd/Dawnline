@@ -83,13 +83,27 @@ export function offsetLabel(minutes) {
 }
 
 // Is this instant in Ramadan, by the Umm al-Qura calendar built into the browser?
+let hijriMonthFmt = null;
 export function isRamadan(spec, ms) {
   try {
     const shifted = ms + offsetAt(spec, ms) * MIN;
-    const f = new Intl.DateTimeFormat("en-US-u-ca-islamic-umalqura", { timeZone: "UTC", month: "numeric" });
-    return +f.formatToParts(new Date(shifted)).find((x) => x.type === "month").value === 9;
+    hijriMonthFmt ||= new Intl.DateTimeFormat("en-US-u-ca-islamic-umalqura", { timeZone: "UTC", month: "numeric" });
+    return +hijriMonthFmt.formatToParts(new Date(shifted)).find((x) => x.type === "month").value === 9;
   } catch {
     return false;
+  }
+}
+
+// Hijri date (Umm al-Qura calendar built into the browser) whose daytime
+// falls on the civil date y-m-d, e.g. "13 Jumada II 1448". In Islamic
+// counting that day began at the previous evening's Maghrib.
+let hijriFmt = null;
+export function hijriLabel(ymd) {
+  try {
+    hijriFmt ||= new Intl.DateTimeFormat("en-GB-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+    return hijriFmt.format(new Date(Date.UTC(ymd.y, ymd.m - 1, ymd.d, 12))).replace(/\s*AH$/, "");
+  } catch {
+    return "";
   }
 }
 

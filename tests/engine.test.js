@@ -176,3 +176,36 @@ test("Typed angle: rising and setting times, and unreachable angles", () => {
   const above70 = timesAtAltitude(day, 70);
   assert.ok(!Number.isFinite(above70.rising), "the sun stays below 70°");
 });
+
+// ---------- day and night through the year ----------
+import { yearSeries, turningPoints, around } from "../js/year.js";
+
+test("Year turning points: solstices in Paris, Sydney reversed, Tromsø midnight sun and polar night", () => {
+  const ymdStr = (s, i) => `${s[i].ymd.y}-${s[i].ymd.m}-${s[i].ymd.d}`;
+  const check = (lat, lon, zone, ymd, expect) => {
+    const s = yearSeries({ lat, lon }, ymd, { zone }, M.mwl);
+    const c = s.findIndex((e) => e.i === 0);
+    const mx = around(turningPoints(s, "dayLen", "max"), c), mn = around(turningPoints(s, "dayLen", "min"), c);
+    return { s, c, mx, mn, str: (g) => g && (g.from === g.to ? ymdStr(s, g.from) : `${ymdStr(s, g.from)}..${ymdStr(s, g.to)}`) };
+  };
+  let r = check(48.8566, 2.3522, "Europe/Paris", { y: 2026, m: 11, d: 23 });
+  assert.equal(r.str(r.mx.past), "2026-6-21");
+  assert.equal(r.str(r.mn.next), "2026-12-21");
+  assert.ok(r.s[r.c].dayLen < r.s[r.c - 1].dayLen, "days shrinking in November");
+  r = check(48.8566, 2.3522, "Europe/Paris", { y: 2026, m: 12, d: 21 });
+  assert.equal(r.str(r.mn.at), "2026-12-21", "21 December is the shortest day");
+  r = check(-33.8688, 151.2093, "Australia/Sydney", { y: 2026, m: 11, d: 23 });
+  assert.equal(r.str(r.mx.next), "2026-12-22");
+  r = check(69.6496, 18.956, "Europe/Oslo", { y: 2026, m: 11, d: 23 });
+  assert.equal(r.str(r.mx.past), "2026-5-18..2026-7-25", "midnight sun");
+  assert.equal(r.str(r.mn.next), "2026-11-27..2027-1-14", "polar night");
+});
+
+test("Islamic counting: the night opens at the previous Maghrib, the day ends at Maghrib", () => {
+  const s = yearSeries({ lat: 33.5731, lon: -7.5898 }, { y: 2026, m: 11, d: 16 }, MOROCCO, M.morocco, "method", 40);
+  const c = s.findIndex((e) => e.i === 0);
+  const t = s[c].times, prev = s[c - 1].times;
+  assert.equal(s[c].fast, t.maghrib - t.fajr);
+  assert.equal(s[c].islNight, t.fajr - prev.maghrib);
+  assert.ok(Math.abs(s[c].fast + s[c].islNight - 86400000) < 5 * 60000, "night + day is about 24 h");
+});

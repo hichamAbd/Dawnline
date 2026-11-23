@@ -3,9 +3,10 @@ import { METHODS, HIGH_LAT_RULES, REGION_DEFAULTS, CONTINENT_DEFAULTS, RULES_UPD
 import { TZ_RULES_UPDATED, COUNTRY_ZONES } from "./data/timezones.js";
 import { EXPLAIN, PRAYERS_GUIDE } from "./data/explain.js";
 import { sunDay, methodTimes, PRAYERS, PRAYER_NAMES, sunMoments, timesAtAltitude } from "./prayer.js";
-import { hhmm, offsetAt, offsetLabel, localParts, zonedToUtc } from "./tz.js";
+import { hhmm, offsetAt, offsetLabel, localParts, zonedToUtc, hijriLabel } from "./tz.js";
+import { yearSeries, turningPoints, around } from "./year.js";
 import { sunAltitude } from "./astro.js";
-import { drawGraph, drawSun, drawAxis, drawBars, drawMoments, drawPrayerDiagram, placeNowLine, WINDOW_COLORS, xOf, tOf } from "./graph.js";
+import { drawGraph, drawSun, drawAxis, drawBars, drawMoments, drawPrayerDiagram, drawYearChart, placeNowLine, WINDOW_COLORS, xOf, tOf } from "./graph.js";
 import { skyFor } from "./sky.js";
 import { loadGeo, describePlace, zoneFor } from "./geo.js";
 import { mountMap } from "./map.js";
@@ -291,6 +292,176 @@ function renderMoments() {
   row("Nautical twilight", range(d.nautical, 12), "12°");
   row("Astronomical twilight", range(d.astronomical, 18), "18°");
   row("Sun's height at noon", `${d.maxAlt.toFixed(1)}°`);
+  const more = document.createElement("button");
+  more.type = "button";
+  more.className = "more-link moments-more";
+  more.textContent = "Longest and shortest days, through the year →";
+  more.addEventListener("click", openDayNight);
+  box.appendChild(more);
+}
+
+// ---------- "Day and night": the yearly cycle, by the sun and the Islamic way ----------
+function openDayNight() {
+  const place = state.settings.place;
+  const fav = byId[state.settings.fav];
+  const center = state.day.ymd;
+  const series = yearSeries(place, center, spec(), fav, state.settings.highLat);
+  const c = series.findIndex((e) => e.i === 0);
+  const today = series[c], yest = series[c - 1];
+  const H24 = 86400000;
+  const dateOf = (i) => {
+    const s = ymdText(series[i].ymd);
+    return series[i].ymd.y === center.y ? s : `${s} ${series[i].ymd.y}`;
+  };
+  const rel = (i) => {
+    const n = i - c;
+    return n === 0 ? "today" : n === 1 ? "tomorrow" : n === -1 ? "yesterday" : n > 0 ? `in ${n} days` : `${-n} days ago`;
+  };
+  const durS = (ms) => {
+    const s = Math.round(Math.abs(ms) / 1000);
+    return s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`;
+  };
+  const stat = (parent, label, value, sub) => {
+    const r = document.createElement("div");
+    r.className = "stat";
+    const top = document.createElement("div");
+    top.className = "stat-top";
+    const k = document.createElement("span");
+    k.className = "k";
+    k.textContent = label;
+    const v = document.createElement("b");
+    v.textContent = value;
+    top.append(k, v);
+    r.append(top);
+    if (sub) { const s = document.createElement("div"); s.className = "stat-sub"; s.textContent = sub; r.append(s); }
+    parent.append(r);
+  };
+  const trend = (key, noun) => {
+    const d = today[key] - yest[key];
+    if (!Number.isFinite(d)) return "";
+    if (Math.abs(d) < 1000) return `About as long as yesterday's ${noun}.`;
+    return `${d > 0 ? "Longer" : "Shorter"} than yesterday's ${noun} by ${durS(d)}.`;
+  };
+  // A bar from the last turning point to the next one, with today on it.
+  const progress = (parent, key, maxLabel, minLabel) => {
+    const mx = around(turningPoints(series, key, "max"), c), mn = around(turningPoints(series, key, "min"), c);
+    const past = [mx.past && { g: mx.past, label: maxLabel }, mn.past && { g: mn.past, label: minLabel }].filter(Boolean).sort((a, b) => b.g.to - a.g.to)[0];
+    const next = [mx.next && { g: mx.next, label: maxLabel }, mn.next && { g: mn.next, label: minLabel }].filter(Boolean).sort((a, b) => a.g.from - b.g.from)[0];
+    if (!past || !next || mx.at || mn.at) return { mx, mn };
+    const f = (c - past.g.to) / (next.g.from - past.g.to);
+    const wrap = document.createElement("div");
+    wrap.className = "cycle";
+    const bar = document.createElement("div");
+    bar.className = "cycle-bar";
+    const fill = document.createElement("div");
+    fill.className = "cycle-fill";
+    fill.style.width = `${(f * 100).toFixed(1)}%`;
+    const dot = document.createElement("div");
+    dot.className = "cycle-dot";
+    dot.style.left = `${(f * 100).toFixed(1)}%`;
+    bar.append(fill, dot);
+    const labels = document.createElement("div");
+    labels.className = "cycle-labels";
+    const a = document.createElement("span");
+    a.textContent = `${past.label} · ${dateOf(past.g.to)}`;
+    const b = document.createElement("span");
+    b.textContent = `${next.label} · ${dateOf(next.g.from)}`;
+    labels.append(a, b);
+    const pct = document.createElement("div");
+    pct.className = "stat-sub";
+    pct.textContent = `${Math.round(f * 100)}% of the way from one to the other.`;
+    wrap.append(labels, bar, pct);
+    parent.append(wrap);
+    return { mx, mn };
+  };
+  // One turning point as a stat row: today, the next one, and the last one.
+  const turning = (parent, a, key, label, describe) => {
+    const g = a.at || a.next;
+    if (!g) return;
+    const span = g.from !== g.to;
+    if (typeof label === "function") label = label(g, span);
+    const when = a.at ? (span ? `now, until ${dateOf(g.to)}` : "today") : span ? `${dateOf(g.from)} → ${dateOf(g.to)}` : dateOf(g.from);
+    const value = a.at ? when : `${when} · ${rel(g.from)}`;
+    let sub = describe(g);
+    if (!a.at && a.past) sub += ` Last one ${span ? `began ${dateOf(a.past.from)}` : `${dateOf(a.past.from)}, ${rel(a.past.from)}`}.`;
+    stat(parent, label, value, sub);
+  };
+
+  openSheet(({ title, body }) => {
+    title.textContent = "Day and night";
+    body.append(para(`${place.name} · ${ymdText(center)}${state.live ? " (today)" : ""}. The figures follow the day shown on the main screen.`, "note"));
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "yr-chart");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Length of the day through the year");
+    const legend = document.createElement("div");
+    legend.className = "yr-legend";
+    const lg = (cls, txt) => { const s = document.createElement("span"); const sw = document.createElement("i"); sw.className = cls; s.append(sw, text(txt)); legend.append(s); };
+    lg("sw-day", "Sunrise → sunset");
+    lg("sw-fast", `Fajr → Maghrib · ★ ${fav.short}`);
+    body.append(svg, legend);
+    requestAnimationFrame(() => drawYearChart(svg, series, c, { width: Math.max(260, svg.clientWidth || body.clientWidth - 32) }));
+
+    // --- the sun: sunrise to sunset ---
+    body.append(h3("By the sun · sunrise to sunset"));
+    const sun = document.createElement("div");
+    sun.className = "stats";
+    body.append(sun);
+    stat(sun, "This day", `Day ${dur(today.dayLen)} · night ${dur(today.nightLen)}`, trend("dayLen", "day"));
+    const sp = progress(sun, "dayLen", "Longest day", "Shortest day");
+    const isMidnightSun = (g) => series[g.from].dayLen >= H24;
+    const isPolarNight = (g) => series[g.from].dayLen <= 0;
+    turning(sun, sp.mn, "dayLen", (g, span) => (span ? "Polar night" : "Shortest day"), (g) => isPolarNight(g) ? "Polar night: the sun does not rise." : `Day ${dur(series[g.from].dayLen)}; the night after it, ${dur(series[g.from].nightLen)}, is the longest.`);
+    turning(sun, sp.mx, "dayLen", (g, span) => (span ? "Midnight sun" : "Longest day"), (g) => isMidnightSun(g) ? "Midnight sun: the sun does not set." : `Day ${dur(series[g.from].dayLen)}; the night after it, ${dur(series[g.from].nightLen)}, is the shortest.`);
+
+    // --- Islamic counting: Maghrib to Maghrib ---
+    body.append(h3(`Islamic counting · ★ ${fav.short}`));
+    body.append(para("An Islamic day begins at Maghrib: first its night, from Maghrib to Fajr, then its day, the fasting day, from Fajr to Maghrib."));
+    const isl = document.createElement("div");
+    isl.className = "stats";
+    body.append(isl);
+    const prevMaghrib = today.times.fajr - today.islNight;
+    if (Number.isFinite(today.fast) && Number.isFinite(today.islNight)) {
+      let sub = `From Maghrib ${dateOf(c - 1)} at ${fmt(prevMaghrib)} to Maghrib ${dateOf(c)} at ${fmt(today.times.maghrib)}. Umm al-Qura calendar; a local moon sighting can put it a day apart.`;
+      if (state.live && Date.now() >= today.times.maghrib) sub += ` Since Maghrib it is already ${hijriLabel(series[c + 1].ymd)}.`;
+      stat(isl, "This Islamic day", hijriLabel(center) || ymdText(center), sub);
+      stat(isl, "Its night and its day", `Night ${dur(today.islNight)} · day ${dur(today.fast)}`, trend("fast", "fasting day"));
+      const ip = progress(isl, "fast", "Longest fasting day", "Shortest fasting day");
+      // The Islamic night closest to a fasting-day turning point.
+      const nightNear = (kind, g) => {
+        const a = around(turningPoints(series, "islNight", kind), g.from);
+        return [a.at, a.past, a.next].filter(Boolean).sort((x, y) => Math.abs(x.from - g.from) - Math.abs(y.from - g.from))[0] || null;
+      };
+      const nightText = (kind, g, word) => {
+        const n = nightNear(kind, g);
+        return n ? ` The ${word} night runs from Maghrib ${dateOf(n.from - 1)} to Fajr ${dateOf(n.from)}: ${dur(series[n.from].islNight)}.` : "";
+      };
+      turning(isl, ip.mn, "fast", "Shortest fasting day", (g) => `Fajr → Maghrib ${dur(series[g.from].fast)}.` + nightText("max", g, "longest"));
+      turning(isl, ip.mx, "fast", "Longest fasting day", (g) => `Fajr → Maghrib ${dur(series[g.from].fast)}.` + nightText("min", g, "shortest"));
+    } else {
+      stat(isl, "This Islamic day", hijriLabel(center) || ymdText(center), "Fajr or Maghrib cannot be placed from the sun here on this day.");
+    }
+
+    // --- earliest and latest prayer times in the year around this day ---
+    body.append(h3(`The next 12 months · ★ ${fav.short}`));
+    const ext = document.createElement("div");
+    ext.className = "stats";
+    body.append(ext);
+    const i0 = c, i1 = Math.min(series.length - 1, c + 364);
+    const clock = (ms, late) => { const p = localParts(spec(), ms); let m = p.hh * 60 + p.mm; if (late && m < 720) m += 1440; return m; };
+    for (const [k, late] of [["fajr", false], ["maghrib", true], ["isha", true]]) {
+      let lo = null, hi = null;
+      for (let i = i0; i <= i1; i++) {
+        const v = series[i].times[k];
+        if (!Number.isFinite(v)) continue;
+        const m = clock(v, late);
+        if (!lo || m < lo.m) lo = { m, i, v };
+        if (!hi || m > hi.m) hi = { m, i, v };
+      }
+      if (lo && hi) stat(ext, PRAYER_NAMES[k], `${fmt(lo.v)} → ${fmt(hi.v)}`, `Earliest ${dateOf(lo.i)}, latest ${dateOf(hi.i)} (clock time, over the next 12 months).`);
+    }
+  });
 }
 
 function infoBtn(topic) {
