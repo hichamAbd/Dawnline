@@ -253,46 +253,80 @@ export function drawBars(svg, day, rows, opts) {
   return { hits, names, height: yy };
 }
 
-// Day length through a year centred on index c of a yearSeries: sunrise to
-// sunset (white) and Fajr to Maghrib (gold), hours 0-24, today marked.
-export function drawYearChart(svg, series, c, opts) {
-  const { width: W } = opts;
-  const H = 180, top = 10, bottom = 22, left = 30;
-  const plotW = W - left - 4, plotH = H - top - bottom;
+// Shared frame of the year charts: x runs over the year centred on index c of
+// a yearSeries, with month initials; both charts line up one above the other.
+const YR = { top: 10, bottom: 22, left: 50 };
+function yearFrame(svg, series, c, W, H) {
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.setAttribute("height", H);
   svg.replaceChildren();
   const i0 = Math.max(0, c - 182), i1 = Math.min(series.length - 1, c + 182);
-  const x = (i) => left + ((i - i0) / (i1 - i0)) * plotW;
-  const y = (ms) => top + (1 - ms / 86400000) * plotH;
-  for (const h of [0, 6, 12, 18, 24]) {
-    el("line", { x1: left, x2: W - 4, y1: y(h * 3600000), y2: y(h * 3600000), class: h % 24 ? "yr-grid" : "yr-grid yr-grid-edge" }, svg);
-    if (h % 24) { const t = el("text", { x: left - 6, y: y(h * 3600000) + 3.5, class: "yr-label", "text-anchor": "end" }, svg); t.textContent = `${h} h`; }
-  }
+  const plotW = W - YR.left - 4, plotH = H - YR.top - YR.bottom;
+  const x = (i) => YR.left + ((i - i0) / (i1 - i0)) * plotW;
   const initials = "JFMAMJJASOND";
   for (let i = i0; i <= i1; i++) {
     if (series[i].ymd.d !== 1) continue;
-    el("line", { x1: x(i), x2: x(i), y1: top + plotH, y2: top + plotH + 4, class: "yr-tick" }, svg);
+    el("line", { x1: x(i), x2: x(i), y1: YR.top + plotH, y2: YR.top + plotH + 4, class: "yr-tick" }, svg);
     const t = el("text", { x: x(i) + 2, y: H - 6, class: "yr-label" }, svg);
     t.textContent = initials[series[i].ymd.m - 1];
   }
-  const path = (key) => {
-    let d = "", pen = false;
+  const grid = (yy, label, edge) => {
+    el("line", { x1: YR.left, x2: W - 4, y1: yy, y2: yy, class: edge ? "yr-grid yr-grid-edge" : "yr-grid" }, svg);
+    if (label) { const t = el("text", { x: YR.left - 6, y: yy + 3.5, class: "yr-label", "text-anchor": "end" }, svg); t.textContent = label; }
+  };
+  // The curve of series[key] through y(), broken where a value is missing.
+  const segments = (key, y) => {
+    const out = [];
+    let cur = null;
     for (let i = i0; i <= i1; i++) {
       const v = series[i][key];
-      if (!Number.isFinite(v)) { pen = false; continue; }
-      d += `${pen ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`;
-      pen = true;
+      if (!Number.isFinite(v)) { cur = null; continue; }
+      if (!cur) out.push((cur = []));
+      cur.push([x(i), y(v)]);
     }
-    return d;
+    return out;
   };
-  const dayPath = path("dayLen");
-  el("path", { d: `${dayPath}L${x(i1)} ${y(0)}L${x(i0)} ${y(0)}Z`, class: "yr-fill" }, svg);
-  el("path", { d: dayPath, class: "yr-day" }, svg);
-  el("path", { d: path("fast"), class: "yr-fast" }, svg);
-  el("line", { x1: x(c), x2: x(c), y1: top, y2: top + plotH, class: "yr-today" }, svg);
-  for (const [key, cls] of [["dayLen", "yr-dot"], ["fast", "yr-dot yr-dot-fast"]]) {
-    const v = series[c][key];
+  const line = (pts) => pts.map(([a, b], k) => `${k ? "L" : "M"}${a.toFixed(1)} ${b.toFixed(1)}`).join("");
+  const today = (v, y, cls) => {
+    el("line", { x1: x(c), x2: x(c), y1: YR.top, y2: YR.top + plotH, class: "yr-today" }, svg);
     if (Number.isFinite(v)) el("circle", { cx: x(c), cy: y(v), r: 4.5, class: cls }, svg);
+  };
+  return { top: YR.top, plotH, x, grid, segments, line, today };
+}
+
+// Day length through the year: sunrise to sunset, hours 0-24, today marked.
+export function drawYearChart(svg, series, c, opts) {
+  const f = yearFrame(svg, series, c, opts.width, 170);
+  const y = (ms) => f.top + (1 - ms / 86400000) * f.plotH;
+  for (const h of [0, 6, 12, 18, 24]) f.grid(y(h * 3600000), h % 24 ? `${h} h` : "", h % 24 === 0);
+  for (const pts of f.segments("dayLen", y)) {
+    const d = f.line(pts);
+    el("path", { d: `${d}L${pts[pts.length - 1][0].toFixed(1)} ${y(0)}L${pts[0][0].toFixed(1)} ${y(0)}Z`, class: "yr-fill" }, svg);
+    el("path", { d, class: "yr-day" }, svg);
   }
+  f.today(series[c].dayLen, y, "yr-dot");
+}
+
+// The Islamic day (Maghrib to Maghrib) through the same year, as its gap
+// from 24 h: above the "24 h" line it is longer, below it shorter.
+export function drawIslamicDayChart(svg, series, c, opts) {
+  const f = yearFrame(svg, series, c, opts.width, 150);
+  const DAY = 86400000;
+  let r = 0;
+  for (let i = Math.max(0, c - 182); i <= Math.min(series.length - 1, c + 182); i++) {
+    const v = series[i].islDay - DAY;
+    if (Number.isFinite(v)) r = Math.max(r, Math.abs(v));
+  }
+  const R = Math.max(r * 1.12, 20000);
+  const step = [10, 20, 30, 60, 120, 300, 600, 900, 1200, 1800, 3600, 7200].map((s) => s * 1000).find((s) => Math.floor(R / s) <= 2) || 7200000;
+  const unit = (ms) => { const s = ms / 1000; return s < 60 ? `${s} s` : s < 3600 ? `${s / 60} min` : `${s / 3600} h`; };
+  const y = (ms) => f.top + (0.5 - (ms - DAY) / (2 * R)) * f.plotH;
+  const n = Math.floor(R / step);
+  for (let k = -n; k <= n; k++) f.grid(y(DAY + k * step), k ? `${k > 0 ? "+" : "\u2212"}${unit(Math.abs(k) * step)}` : "24 h", k === 0);
+  for (const pts of f.segments("islDay", y)) {
+    const d = f.line(pts);
+    el("path", { d: `${d}L${pts[pts.length - 1][0].toFixed(1)} ${y(DAY).toFixed(1)}L${pts[0][0].toFixed(1)} ${y(DAY).toFixed(1)}Z`, class: "yr-isl-fill" }, svg);
+    el("path", { d, class: "yr-isl" }, svg);
+  }
+  f.today(series[c].islDay, y, "yr-dot yr-dot-gold");
 }

@@ -4,9 +4,9 @@ import { TZ_RULES_UPDATED, COUNTRY_ZONES } from "./data/timezones.js";
 import { EXPLAIN, PRAYERS_GUIDE } from "./data/explain.js";
 import { sunDay, methodTimes, PRAYERS, PRAYER_NAMES, sunMoments, timesAtAltitude } from "./prayer.js";
 import { hhmm, offsetAt, offsetLabel, localParts, zonedToUtc, hijriLabel } from "./tz.js";
-import { yearSeries, turningPoints, around } from "./year.js";
+import { yearSeries, turningPoints, yearlyExtremes, around } from "./year.js";
 import { sunAltitude } from "./astro.js";
-import { drawGraph, drawSun, drawAxis, drawBars, drawMoments, drawPrayerDiagram, drawYearChart, placeNowLine, WINDOW_COLORS, xOf, tOf } from "./graph.js";
+import { drawGraph, drawSun, drawAxis, drawBars, drawMoments, drawPrayerDiagram, drawYearChart, drawIslamicDayChart, placeNowLine, WINDOW_COLORS, xOf, tOf } from "./graph.js";
 import { skyFor } from "./sky.js";
 import { loadGeo, describePlace, zoneFor } from "./geo.js";
 import { mountMap } from "./map.js";
@@ -104,6 +104,8 @@ function coordsText(p) {
 const dateFmt = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 const dateLong = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 const ymdText = (ymd) => dateFmt.format(new Date(Date.UTC(ymd.y, ymd.m - 1, ymd.d, 12)));
+const dayMonthFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+const dayMonth = (ymd) => dayMonthFmt.format(new Date(Date.UTC(ymd.y, ymd.m - 1, ymd.d, 12)));
 const ymdIso = (ymd) => `${ymd.y}-${String(ymd.m).padStart(2, "0")}-${String(ymd.d).padStart(2, "0")}`;
 function methodSummary(m) {
   const parts = [`Fajr ${m.fajr}°${m.offsets && m.offsets.fajr ? ` + ${m.offsets.fajr} min` : ""}`];
@@ -300,7 +302,7 @@ function renderMoments() {
   box.appendChild(more);
 }
 
-// ---------- "Day and night": the yearly cycle, by the sun and the Islamic way ----------
+// ---------- "Day and night": the yearly cycle, by the sun and the Islamic day ----------
 function openDayNight() {
   const place = state.settings.place;
   const fav = byId[state.settings.fav];
@@ -319,7 +321,14 @@ function openDayNight() {
   };
   const durS = (ms) => {
     const s = Math.round(Math.abs(ms) / 1000);
-    return s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`;
+    if (s < 60) return `${s} s`;
+    const m = Math.floor(s / 60);
+    return m < 60 ? `${m} min ${s % 60} s` : `${Math.floor(m / 60)} h ${m % 60} min`;
+  };
+  // An Islamic day's length as 24 h plus or minus the difference.
+  const islLen = (ms) => {
+    const d = ms - H24;
+    return Math.round(Math.abs(d) / 1000) === 0 ? "24 h" : `24 h ${d > 0 ? "+" : "−"} ${durS(d)}`;
   };
   const stat = (parent, label, value, sub) => {
     const r = document.createElement("div");
@@ -343,11 +352,10 @@ function openDayNight() {
     return `${d > 0 ? "Longer" : "Shorter"} than yesterday's ${noun} by ${durS(d)}.`;
   };
   // A bar from the last turning point to the next one, with today on it.
-  const progress = (parent, key, maxLabel, minLabel) => {
-    const mx = around(turningPoints(series, key, "max"), c), mn = around(turningPoints(series, key, "min"), c);
+  const progress = (parent, mx, mn, maxLabel, minLabel) => {
     const past = [mx.past && { g: mx.past, label: maxLabel }, mn.past && { g: mn.past, label: minLabel }].filter(Boolean).sort((a, b) => b.g.to - a.g.to)[0];
     const next = [mx.next && { g: mx.next, label: maxLabel }, mn.next && { g: mn.next, label: minLabel }].filter(Boolean).sort((a, b) => a.g.from - b.g.from)[0];
-    if (!past || !next || mx.at || mn.at) return { mx, mn };
+    if (!past || !next || mx.at || mn.at) return;
     const f = (c - past.g.to) / (next.g.from - past.g.to);
     const wrap = document.createElement("div");
     wrap.className = "cycle";
@@ -372,10 +380,9 @@ function openDayNight() {
     pct.textContent = `${Math.round(f * 100)}% of the way from one to the other.`;
     wrap.append(labels, bar, pct);
     parent.append(wrap);
-    return { mx, mn };
   };
   // One turning point as a stat row: today, the next one, and the last one.
-  const turning = (parent, a, key, label, describe) => {
+  const turning = (parent, a, label, describe) => {
     const g = a.at || a.next;
     if (!g) return;
     const span = g.from !== g.to;
@@ -386,62 +393,74 @@ function openDayNight() {
     if (!a.at && a.past) sub += ` Last one ${span ? `began ${dateOf(a.past.from)}` : `${dateOf(a.past.from)}, ${rel(a.past.from)}`}.`;
     stat(parent, label, value, sub);
   };
+  // The next turning point first.
+  const soon = (a) => (a.at ? c : a.next ? a.next.from : Infinity);
+  const chart = (label, draw) => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "yr-chart");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", label);
+    requestAnimationFrame(() => draw(svg, series, c, { width: Math.max(260, svg.getBoundingClientRect().width || 300) }));
+    return svg;
+  };
 
   openSheet(({ title, body }) => {
     title.textContent = "Day and night";
     body.append(para(`${place.name} · ${ymdText(center)}${state.live ? " (today)" : ""}. The figures follow the day shown on the main screen.`, "note"));
 
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("class", "yr-chart");
-    svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", "Length of the day through the year");
-    const legend = document.createElement("div");
-    legend.className = "yr-legend";
-    const lg = (cls, txt) => { const s = document.createElement("span"); const sw = document.createElement("i"); sw.className = cls; s.append(sw, text(txt)); legend.append(s); };
-    lg("sw-day", "Sunrise → sunset");
-    lg("sw-fast", `Fajr → Maghrib · ★ ${fav.short}`);
-    body.append(svg, legend);
-    requestAnimationFrame(() => drawYearChart(svg, series, c, { width: Math.max(260, svg.clientWidth || body.clientWidth - 32) }));
-
     // --- the sun: sunrise to sunset ---
     body.append(h3("By the sun · sunrise to sunset"));
+    body.append(chart("Length of the day through the year", drawYearChart));
     const sun = document.createElement("div");
     sun.className = "stats";
     body.append(sun);
     stat(sun, "This day", `Day ${dur(today.dayLen)} · night ${dur(today.nightLen)}`, trend("dayLen", "day"));
-    const sp = progress(sun, "dayLen", "Longest day", "Shortest day");
+    const sMx = around(turningPoints(series, "dayLen", "max"), c), sMn = around(turningPoints(series, "dayLen", "min"), c);
+    progress(sun, sMx, sMn, "Longest day", "Shortest day");
     const isMidnightSun = (g) => series[g.from].dayLen >= H24;
     const isPolarNight = (g) => series[g.from].dayLen <= 0;
-    turning(sun, sp.mn, "dayLen", (g, span) => (span ? "Polar night" : "Shortest day"), (g) => isPolarNight(g) ? "Polar night: the sun does not rise." : `Day ${dur(series[g.from].dayLen)}; the night after it, ${dur(series[g.from].nightLen)}, is the longest.`);
-    turning(sun, sp.mx, "dayLen", (g, span) => (span ? "Midnight sun" : "Longest day"), (g) => isMidnightSun(g) ? "Midnight sun: the sun does not set." : `Day ${dur(series[g.from].dayLen)}; the night after it, ${dur(series[g.from].nightLen)}, is the shortest.`);
+    [
+      [sMn, (g, span) => (span ? "Polar night" : "Shortest day"), (g) => isPolarNight(g) ? "Polar night: the sun does not rise." : `Day ${dur(series[g.from].dayLen)}; the night after it, ${dur(series[g.from].nightLen)}, is the longest.`],
+      [sMx, (g, span) => (span ? "Midnight sun" : "Longest day"), (g) => isMidnightSun(g) ? "Midnight sun: the sun does not set." : `Day ${dur(series[g.from].dayLen)}; the night after it, ${dur(series[g.from].nightLen)}, is the shortest.`],
+    ].sort((p, q) => soon(p[0]) - soon(q[0])).forEach(([a, label, describe]) => turning(sun, a, label, describe));
 
-    // --- Islamic counting: Maghrib to Maghrib ---
-    body.append(h3(`Islamic counting · ★ ${fav.short}`));
-    body.append(para("An Islamic day begins at Maghrib: first its night, from Maghrib to Fajr, then its day, the fasting day, from Fajr to Maghrib."));
+    // --- the Islamic day: Maghrib to Maghrib ---
+    body.append(h3("Islamic day · Maghrib to Maghrib"));
+    body.append(para("An Islamic day runs from one Maghrib to the next. It lasts 24 hours, plus the seconds or minutes by which sunset comes later than the evening before (minus, if earlier). Maghrib is sunset plus fixed minutes in every method, so the lengths are the same for all. Clock changes don't count."));
+    body.append(chart("Length of the Islamic day through the year, compared with 24 hours", drawIslamicDayChart));
     const isl = document.createElement("div");
     isl.className = "stats";
     body.append(isl);
-    const prevMaghrib = today.times.fajr - today.islNight;
-    if (Number.isFinite(today.fast) && Number.isFinite(today.islNight)) {
-      let sub = `From Maghrib ${dateOf(c - 1)} at ${fmt(prevMaghrib)} to Maghrib ${dateOf(c)} at ${fmt(today.times.maghrib)}. Umm al-Qura calendar; a local moon sighting can put it a day apart.`;
-      if (state.live && Date.now() >= today.times.maghrib) sub += ` Since Maghrib it is already ${hijriLabel(series[c + 1].ymd)}.`;
-      stat(isl, "This Islamic day", hijriLabel(center) || ymdText(center), sub);
-      stat(isl, "Its night and its day", `Night ${dur(today.islNight)} · day ${dur(today.fast)}`, trend("fast", "fasting day"));
-      const ip = progress(isl, "fast", "Longest fasting day", "Shortest fasting day");
-      // The Islamic night closest to a fasting-day turning point.
-      const nightNear = (kind, g) => {
-        const a = around(turningPoints(series, "islNight", kind), g.from);
-        return [a.at, a.past, a.next].filter(Boolean).sort((x, y) => Math.abs(x.from - g.from) - Math.abs(y.from - g.from))[0] || null;
-      };
-      const nightText = (kind, g, word) => {
-        const n = nightNear(kind, g);
-        return n ? ` The ${word} night runs from Maghrib ${dateOf(n.from - 1)} to Fajr ${dateOf(n.from)}: ${dur(series[n.from].islNight)}.` : "";
-      };
-      turning(isl, ip.mn, "fast", "Shortest fasting day", (g) => `Fajr → Maghrib ${dur(series[g.from].fast)}.` + nightText("max", g, "longest"));
-      turning(isl, ip.mx, "fast", "Longest fasting day", (g) => `Fajr → Maghrib ${dur(series[g.from].fast)}.` + nightText("min", g, "shortest"));
-    } else {
-      stat(isl, "This Islamic day", hijriLabel(center) || ymdText(center), "Fajr or Maghrib cannot be placed from the sun here on this day.");
+    const iMx = around(yearlyExtremes(series, "islDay", "max"), c), iMn = around(yearlyExtremes(series, "islDay", "min"), c);
+    const prevMaghrib = yest.times.maghrib, maghrib = today.times.maghrib;
+    let sub = Number.isFinite(prevMaghrib) && Number.isFinite(maghrib)
+      ? `From Maghrib ${dateOf(c - 1)} at ${fmt(prevMaghrib)} to Maghrib ${dateOf(c)} at ${fmt(maghrib)} (★ ${fav.short}).`
+      : "No sunset here on this day or the evening before, so no Maghrib to count from.";
+    sub += " Umm al-Qura calendar; a local moon sighting can put it a day apart.";
+    if (state.live && Number.isFinite(maghrib) && Date.now() >= maghrib) sub += ` Since Maghrib it is already ${hijriLabel(series[c + 1].ymd)}.`;
+    stat(isl, "This Islamic day", hijriLabel(center) || ymdText(center), sub);
+    if (Number.isFinite(today.islDay)) {
+      const which = iMx.at ? "The longest of the year. " : iMn.at ? "The shortest of the year. " : "";
+      stat(isl, "Its length", islLen(today.islDay), which + trend("islDay", "Islamic day"));
     }
+    progress(isl, iMx, iMn, "Longest", "Shortest");
+    // Near its peak the length hardly moves: say which days are within a second of it.
+    const describeIsl = (g) => {
+      const i = g.from, v = series[i].islDay;
+      let a = i, b = i;
+      while (a > 0 && Math.abs(series[a - 1].islDay - v) < 1000) a--;
+      while (b < series.length - 1 && Math.abs(series[b + 1].islDay - v) < 1000) b++;
+      const hij = hijriLabel(series[i].ymd);
+      const ya = series[a].ymd, yb = series[b].ymd;
+      const range = ya.m === yb.m ? `${ya.d} to ${dayMonth(yb)}` : `${dayMonth(ya)} to ${dayMonth(yb)}`;
+      let s = `${islLen(v)}, from Maghrib on ${ymdText(series[i - 1].ymd)} to Maghrib on ${ymdText(series[i].ymd)}${hij ? ` (${hij})` : ""}.`;
+      if (b > a) s += ` Every Islamic day from ${range} is within a second of it.`;
+      return s;
+    };
+    [
+      [iMx, "Longest", describeIsl],
+      [iMn, "Shortest", describeIsl],
+    ].sort((p, q) => soon(p[0]) - soon(q[0])).forEach(([a, label, describe]) => turning(isl, a, label, describe));
 
     // --- earliest and latest prayer times in the year around this day ---
     body.append(h3(`The next 12 months · ★ ${fav.short}`));
@@ -449,13 +468,18 @@ function openDayNight() {
     ext.className = "stats";
     body.append(ext);
     const i0 = c, i1 = Math.min(series.length - 1, c + 364);
-    const clock = (ms, late) => { const p = localParts(spec(), ms); let m = p.hh * 60 + p.mm; if (late && m < 720) m += 1440; return m; };
-    for (const [k, late] of [["fajr", false], ["maghrib", true], ["isha", true]]) {
+    // Clock time on the prayer's own date: after midnight counts as 24:xx.
+    const clock = (ms, ymd) => {
+      const p = localParts(spec(), ms);
+      const days = Math.round((Date.UTC(p.y, p.m - 1, p.d) - Date.UTC(ymd.y, ymd.m - 1, ymd.d)) / H24);
+      return days * 1440 + p.hh * 60 + p.mm;
+    };
+    for (const k of ["fajr", "maghrib", "isha"]) {
       let lo = null, hi = null;
       for (let i = i0; i <= i1; i++) {
         const v = series[i].times[k];
         if (!Number.isFinite(v)) continue;
-        const m = clock(v, late);
+        const m = clock(v, series[i].ymd);
         if (!lo || m < lo.m) lo = { m, i, v };
         if (!hi || m > hi.m) hi = { m, i, v };
       }

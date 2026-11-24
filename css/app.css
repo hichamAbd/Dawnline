@@ -319,14 +319,11 @@ button.angle-now:active { background: rgba(255, 255, 255, 0.1); }
 .yr-tick { stroke: rgba(255, 255, 255, 0.3); stroke-width: 1; }
 .yr-fill { fill: rgba(255, 255, 255, 0.07); }
 .yr-day { fill: none; stroke: #fff; stroke-width: 2; stroke-linejoin: round; }
-.yr-fast { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.yr-isl { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.yr-isl-fill { fill: rgba(255, 210, 122, 0.13); }
 .yr-today { stroke: rgba(255, 255, 255, 0.85); stroke-width: 1.4; stroke-dasharray: 3 3; }
 .yr-dot { fill: #fff; stroke: rgba(8, 16, 40, 0.6); stroke-width: 1.5; }
-.yr-dot-fast { fill: var(--accent); }
-.yr-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--ink-2); margin: 2px 0 6px; }
-.yr-legend i { display: inline-block; width: 16px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
-.yr-legend .sw-day { background: #fff; }
-.yr-legend .sw-fast { background: var(--accent); }
+.yr-dot-gold { fill: var(--accent); }
 .stats { display: flex; flex-direction: column; }
 .stat { padding: 10px 0; border-top: 0.5px solid var(--line); }
 .stat:first-child { border-top: 0; padding-top: 2px; }

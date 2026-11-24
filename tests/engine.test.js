@@ -178,7 +178,7 @@ test("Typed angle: rising and setting times, and unreachable angles", () => {
 });
 
 // ---------- day and night through the year ----------
-import { yearSeries, turningPoints, around } from "../js/year.js";
+import { yearSeries, turningPoints, yearlyExtremes, around } from "../js/year.js";
 
 test("Year turning points: solstices in Paris, Sydney reversed, Tromsø midnight sun and polar night", () => {
   const ymdStr = (s, i) => `${s[i].ymd.y}-${s[i].ymd.m}-${s[i].ymd.d}`;
@@ -198,14 +198,56 @@ test("Year turning points: solstices in Paris, Sydney reversed, Tromsø midnight
   assert.equal(r.str(r.mx.next), "2026-12-22");
   r = check(69.6496, 18.956, "Europe/Oslo", { y: 2026, m: 11, d: 23 });
   assert.equal(r.str(r.mx.past), "2026-5-18..2026-7-25", "midnight sun");
-  assert.equal(r.str(r.mn.next), "2026-11-27..2027-1-14", "polar night");
+  assert.equal(r.str(r.mn.next), "2026-11-28..2027-1-14", "polar night (on 27 Nov the sun still peeps out at noon)");
+  // The days the midnight sun begins and ends are not turning points of their own.
+  r = check(69.6496, 18.956, "Europe/Oslo", { y: 2027, m: 6, d: 15 });
+  assert.equal(r.str(r.mx.at), "2027-5-18..2027-7-25", "midnight sun now");
+  assert.equal(r.str(r.mn.next), "2027-11-28..2028-1-14", "next shortest day: the polar night, not the end of the midnight sun");
+  const jul26 = r.s.find((e) => e.ymd.m === 7 && e.ymd.d === 26 && e.ymd.y === 2027);
+  assert.ok(jul26.dayLen > 23 * 3600000 && jul26.dayLen < 86400000, "first sunset after the midnight sun: almost a full day");
 });
 
-test("Islamic counting: the night opens at the previous Maghrib, the day ends at Maghrib", () => {
-  const s = yearSeries({ lat: 33.5731, lon: -7.5898 }, { y: 2026, m: 11, d: 16 }, MOROCCO, M.morocco, "method", 40);
-  const c = s.findIndex((e) => e.i === 0);
-  const t = s[c].times, prev = s[c - 1].times;
-  assert.equal(s[c].fast, t.maghrib - t.fajr);
-  assert.equal(s[c].islNight, t.fajr - prev.maghrib);
-  assert.ok(Math.abs(s[c].fast + s[c].islNight - 86400000) < 5 * 60000, "night + day is about 24 h");
+test("Islamic day: Maghrib to Maghrib, the same for every method, real time across a clock change", () => {
+  const P = { lat: 48.8566, lon: 2.3522 }, ymd = { y: 2026, m: 11, d: 24 }, zone = { zone: "Europe/Paris" };
+  const a = yearSeries(P, ymd, zone, M.france12), b = yearSeries(P, ymd, zone, M.gmp), d = yearSeries(P, ymd, zone, M.morocco);
+  const c = a.findIndex((e) => e.i === 0);
+  for (const s of [a, b, d]) assert.ok(Math.abs(s[c].islDay - (s[c].times.maghrib - s[c - 1].times.maghrib)) < 1, "Maghrib to Maghrib");
+  assert.ok(Math.abs(a[c].islDay - b[c].islDay) < 1 && Math.abs(a[c].islDay - d[c].islDay) < 1, "same length for every method");
+  const dev = (e) => (e.islDay - 86400000) / 1000;
+  assert.ok(Math.abs(dev(a[c]) + 51.4) < 1, `24 Nov 2026: 24 h - 51 s (got ${dev(a[c])})`);
+  const dst = a.find((e) => e.ymd.y === 2027 && e.ymd.m === 3 && e.ymd.d === 28);
+  assert.ok(Math.abs(dev(dst) - 90) < 2, `clocks go forward on 28 Mar 2027, the Islamic day still lasts 24 h + 1.5 min (got ${dev(dst)} s)`);
+});
+
+test("Islamic day: longest and shortest of the year (Paris, Casablanca with two peaks, Tromsø)", () => {
+  const ymdStr = (s, g) => g && `${s[g.from].ymd.y}-${s[g.from].ymd.m}-${s[g.from].ymd.d}`;
+  const dev = (s, g) => (s[g.from].islDay - 86400000) / 1000;
+  const run = (lat, lon, zone, ymd) => {
+    const s = yearSeries({ lat, lon }, ymd, { zone }, M.mwl);
+    const c = s.findIndex((e) => e.i === 0);
+    return { s, c, mx: around(yearlyExtremes(s, "islDay", "max"), c), mn: around(yearlyExtremes(s, "islDay", "min"), c) };
+  };
+  let r = run(48.8566, 2.3522, "Europe/Paris", { y: 2026, m: 11, d: 24 });
+  assert.equal(ymdStr(r.s, r.mx.next), "2027-2-9");
+  assert.ok(Math.abs(dev(r.s, r.mx.next) - 99.4) < 1, "longest: 24 h + 1 min 39 s");
+  assert.equal(ymdStr(r.s, r.mn.next), "2027-9-20");
+  assert.ok(Math.abs(dev(r.s, r.mn.next) + 128) < 1, "shortest: 24 h - 2 min 8 s");
+  assert.equal(ymdStr(r.s, r.mn.past), "2026-9-20");
+  // The day after the peak: the next one is a year away, not tomorrow.
+  r = run(48.8566, 2.3522, "Europe/Paris", { y: 2027, m: 2, d: 10 });
+  assert.equal(ymdStr(r.s, r.mx.past), "2027-2-9");
+  assert.equal(ymdStr(r.s, r.mx.next), "2028-2-9");
+  r = run(48.8566, 2.3522, "Europe/Paris", { y: 2027, m: 2, d: 9 });
+  assert.equal(ymdStr(r.s, r.mx.at), "2027-2-9", "today is the longest");
+  // Casablanca has a second, lower peak in May: only January's counts.
+  r = run(33.5731, -7.5898, "Africa/Casablanca", { y: 2026, m: 11, d: 24 });
+  assert.equal(turningPoints(r.s, "islDay", "max").filter((g) => g.from > r.c && g.from <= r.c + 365).length, 2, "two peaks a year");
+  assert.equal(ymdStr(r.s, r.mx.next), "2027-1-28");
+  assert.ok(Math.abs(dev(r.s, r.mx.next) - 58.6) < 1);
+  assert.equal(ymdStr(r.s, r.mn.next), "2027-9-20");
+  // Tromsø: no Maghrib under the midnight sun or the polar night, the extremes sit at their edges.
+  r = run(69.6496, 18.956, "Europe/Oslo", { y: 2026, m: 11, d: 24 });
+  assert.ok(r.s.filter((e) => e.ymd.y === 2027 && e.ymd.m === 6).every((e) => !Number.isFinite(e.islDay)), "no Maghrib in June");
+  assert.equal(ymdStr(r.s, r.mx.next), "2027-5-17");
+  assert.ok(dev(r.s, r.mx.next) > 15 * 60, "the last sunsets before the midnight sun come much later each evening");
 });
